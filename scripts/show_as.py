@@ -293,7 +293,7 @@ class PointAtLandmark(smach.State):
             rospy.loginfo("PointingConfig preempted")
             self.service_preempt()
             return 'preempted'
-        
+
         if point_at.success:
             return 'succeeded'
         else:
