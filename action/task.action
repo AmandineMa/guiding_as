@@ -1,0 +1,19 @@
+#Goal
+
+string place_frame
+string person_frame
+#StampedPose[] agents
+#StampedPoint target
+
+---
+#Result
+
+bool success
+string failure_reason
+
+---
+#Feedback
+
+string current_step
+float64 remaining_cost
+float64 success_probability
