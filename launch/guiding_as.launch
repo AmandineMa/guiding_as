@@ -1,0 +1,6 @@
+<launch>
+
+    <node pkg="guiding_as" type="guiding_action_server.py" name="guiding_action_server" output="screen"/>
+    <rosparam command="load" file="$(find guiding_as)/params/guiding.yaml" />
+
+</launch>
