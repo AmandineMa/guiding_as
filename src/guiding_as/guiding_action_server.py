@@ -1123,11 +1123,6 @@ class PointAndLookAtHumanFuturePlace(smach.State):
         except rospy.ServiceException, e:
             rospy.logerr("speech exception")
 
-        point_at_request = PointAtRequest()
-        point_at_request.point.header = userdata.human_pose.header
-        point_at_request.point.point = userdata.human_pose.pose.position
-        point_at = GuidingAction.services_proxy["point_at"](point_at_request)
-
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = userdata.human_pose.header.frame_id
         target = TargetWithDuration()
@@ -1137,9 +1132,14 @@ class PointAndLookAtHumanFuturePlace(smach.State):
         coord_signal.targets.append(target)
         coord_signal.priority = 100
         coord_signal.expiration = rospy.Time() + rospy.Duration(3.0)
-        coord_signal.regex_end_condition = "isPerceiving\(robot,"+userdata.human_pose.header.frame_id+"\)"
-        coord_signal.predicate = "isWaiting(robot,"+userdata.human_pose.header.frame_id+")"
+        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.human_pose.header.frame_id + "\)"
+        coord_signal.predicate = "isWaiting(robot," + userdata.human_pose.header.frame_id + ")"
         GuidingAction.coord_signals_publisher.publish(coord_signal)
+
+        point_at_request = PointAtRequest()
+        point_at_request.point.header = userdata.human_pose.header
+        point_at_request.point.point = userdata.human_pose.pose.position
+        point_at = GuidingAction.services_proxy["point_at"](point_at_request)
 
         # look_at_request = LookAtRequest()
         # look_at_request.point.header = userdata.human_pose.header
@@ -1573,12 +1573,6 @@ class PointAndLookAtLandmark(smach.State):
         elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
             speech = "You need to go through the " + target_name.value + " here"
 
-        GuidingAction.feedback.current_step = "Point at the landmark"
-        GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
-        point_at_request = PointAtRequest()
-        point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-        point_at = GuidingAction.services_proxy["point_at"](point_at_request)
-
         try:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point, speech, SPEECH_PRIORITY)
         except rospy.ServiceException, e:
@@ -1592,9 +1586,15 @@ class PointAndLookAtLandmark(smach.State):
         coord_signal.targets.append(target)
         coord_signal.priority = 100
         coord_signal.expiration = rospy.Time() + rospy.Duration(3.0)
-        coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.landmark_to_point[LANDMARK_NAME] + "\)"
-        coord_signal.predicate = "isWaiting(robot," + userdata.landmark_to_point[LANDMARK_NAME] + ")"
+        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.landmark_to_point[LANDMARK_NAME] + "\)"
+        # coord_signal.predicate = "isWaiting(robot," + userdata.landmark_to_point[LANDMARK_NAME] + ")"
         GuidingAction.coord_signals_publisher.publish(coord_signal)
+
+        GuidingAction.feedback.current_step = "Point at the landmark"
+        GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
+        point_at_request = PointAtRequest()
+        point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
+        point_at = GuidingAction.services_proxy["point_at"](point_at_request)
 
         rospy.sleep(POINTING_DURATION)
         # look_at_request = LookAtRequest()
