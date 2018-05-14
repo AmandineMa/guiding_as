@@ -1,0 +1,21 @@
+actions:
+- task
+authors: ''
+brief: ''
+bugtracker: ''
+depends:
+- catkin
+- actionlib_msgs
+- std_msgs
+- python-catkin-pkg
+- rospy
+- message_generation
+- actionlib
+description: The guiding action server package
+license: TODO
+maintainers: amayima <amayima@todo.todo>
+msgs: []
+package_type: package
+repo_url: ''
+srvs: []
+url: ''

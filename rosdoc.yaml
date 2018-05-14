@@ -1,0 +1,2 @@
+ - builder: sphinx # sphinx or doxygen
+   sphinx_root_dir: doc
