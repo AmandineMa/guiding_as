@@ -1125,7 +1125,7 @@ class PointAndLookAtHumanFuturePlace(smach.State):
 
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = userdata.human_pose.header.frame_id
-        target = TargetWithDuration()
+        target = TargetWithExpiration()
         target.target.header.frame_id = userdata.human_pose.header.frame_id
         target.target.point = userdata.human_pose.pose.position
         target.duration = rospy.Duration(2.0)
@@ -1216,7 +1216,7 @@ class LookAtHumanAssumedPlace(smach.State):
 
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = look_at.header.frame_id
-        target = TargetWithDuration()
+        target = TargetWithExpiration()
         target.target = look_at
         target.duration = rospy.Duration(4.0)
         coord_signal.targets.append(target)
@@ -1583,7 +1583,7 @@ class PointAndLookAtLandmark(smach.State):
 
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-        target = TargetWithDuration()
+        target = TargetWithExpiration()
         target.target.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
         target.duration = rospy.Duration(3.0)
         coord_signal.targets.append(target)
@@ -1647,7 +1647,7 @@ class LookAtHuman(smach.State):
         """Looks at the human"""
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = userdata.person_frame
-        target = TargetWithDuration()
+        target = TargetWithExpiration()
         target.target.header.frame_id = userdata.person_frame
         target.duration = rospy.Duration(2.0)
         coord_signal.targets.append(target)
