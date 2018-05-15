@@ -726,7 +726,7 @@ class GetRouteRegion(smach.State):
                 ROBOT_PLACE,
                 userdata.target_frame,
                 PERSONNA,
-                True)
+                False)
 
         except rospy.ServiceException, e:
             return 'aborted'
