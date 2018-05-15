@@ -29,7 +29,7 @@ action_servers:
   dialogue: dialogue_as
 
 tuning_param:
-  pointing_duration: 0.5 #seconds
+  pointing_duration: 1.5 #seconds
   stop_tracking_dist_th: 0.3 #meters
   should_move_dist_th: 0.5 #meters
   take_robot_place_dist_th: 0.6 #meters
