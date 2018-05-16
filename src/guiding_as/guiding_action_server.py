@@ -109,68 +109,68 @@ class GuidingAction(object):
         global OBSERVE_LANDMARK_TIMEOUT
         OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/tuning_param/observe_landmark_timeout')
 
-        # rospy.loginfo("waiting for service " + stand_pose_srv)
-        # rospy.wait_for_service(stand_pose_srv)
+        rospy.loginfo("waiting for service " + stand_pose_srv)
+        rospy.wait_for_service(stand_pose_srv)
+
+        rospy.loginfo("waiting for service " + say_srv)
+        rospy.wait_for_service(say_srv)
+
+        rospy.loginfo("waiting for service " + get_route_region_srv)
+        rospy.wait_for_service(get_route_region_srv)
+
+        rospy.loginfo("waiting for service " + get_route_description_srv)
+        rospy.wait_for_service(get_route_description_srv)
+
+        rospy.loginfo("waiting for service " + has_mesh_srv)
+        rospy.wait_for_service(has_mesh_srv)
+
+        rospy.loginfo("waiting for service " + get_individual_info_srv)
+        rospy.wait_for_service(get_individual_info_srv)
+
+        rospy.loginfo("waiting for service " + get_pointing_config_srv)
+        rospy.wait_for_service(get_pointing_config_srv)
+
+        rospy.loginfo("waiting for service " + look_at_srv)
+        rospy.wait_for_service(look_at_srv)
+
+        rospy.loginfo("waiting for service " + point_at_srv)
+        rospy.wait_for_service(point_at_srv)
+
+        rospy.loginfo("waiting for service " + monitor_humans_srv)
+        rospy.wait_for_service(monitor_humans_srv)
+
+        rospy.loginfo("waiting for service " + start_fact_srv)
+        rospy.wait_for_service(start_fact_srv)
+
+        rospy.loginfo("waiting for service " + end_fact_srv)
+        rospy.wait_for_service(end_fact_srv)
+
+        rospy.loginfo("waiting for service " + find_alternate_id_srv)
+        rospy.wait_for_service(find_alternate_id_srv)
+
+        # rospy.loginfo("waiting for service " + activate_dialogue_srv)
+        # rospy.wait_for_service(activate_dialogue_srv)
         #
-        # rospy.loginfo("waiting for service " + say_srv)
-        # rospy.wait_for_service(say_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_route_region_srv)
-        # rospy.wait_for_service(get_route_region_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_route_description_srv)
-        # rospy.wait_for_service(get_route_description_srv)
-        #
-        # rospy.loginfo("waiting for service " + has_mesh_srv)
-        # rospy.wait_for_service(has_mesh_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_individual_info_srv)
-        # rospy.wait_for_service(get_individual_info_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_pointing_config_srv)
-        # rospy.wait_for_service(get_pointing_config_srv)
-        #
-        # rospy.loginfo("waiting for service " + look_at_srv)
-        # rospy.wait_for_service(look_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + point_at_srv)
-        # rospy.wait_for_service(point_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + monitor_humans_srv)
-        # rospy.wait_for_service(monitor_humans_srv)
-        #
-        # rospy.loginfo("waiting for service " + start_fact_srv)
-        # rospy.wait_for_service(start_fact_srv)
-        #
-        # rospy.loginfo("waiting for service " + end_fact_srv)
-        # rospy.wait_for_service(end_fact_srv)
-        #
-        # rospy.loginfo("waiting for service " + find_alternate_id_srv)
-        # rospy.wait_for_service(find_alternate_id_srv)
-        #
-        # # rospy.loginfo("waiting for service " + activate_dialogue_srv)
-        # # rospy.wait_for_service(activate_dialogue_srv)
-        # #
-        # # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
-        # # rospy.wait_for_service(deactivate_dialogue_srv)
-        #
-        # GuidingAction.services_proxy = {
-        #     "stand_pose": rospy.ServiceProxy(stand_pose_srv,
-        #                                      nao_interaction_msgs.srv.GoToPosture),
-        #     "say": rospy.ServiceProxy(say_srv, SpeakTo),
-        #     "get_route_region": rospy.ServiceProxy(get_route_region_srv, SemanticRoute),
-        #     "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
-        #     "has_mesh": rospy.ServiceProxy(has_mesh_srv, HasMesh),
-        #     "get_individual_info": rospy.ServiceProxy(get_individual_info_srv, standard_service),
-        #     "get_pointing_config": rospy.ServiceProxy(get_pointing_config_srv, PointingPlanner),
-        #     "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
-        #     "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
-        #     "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
-        #     "start_fact": rospy.ServiceProxy(start_fact_srv, StartFact),
-        #     "end_fact": rospy.ServiceProxy(start_fact_srv, EndFact),
-        #     "find_alternate_id": rospy.ServiceProxy(find_alternate_id_srv, FindAlternateId)}
-        #     # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
-        #     # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
+        # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
+        # rospy.wait_for_service(deactivate_dialogue_srv)
+
+        GuidingAction.services_proxy = {
+            "stand_pose": rospy.ServiceProxy(stand_pose_srv,
+                                             nao_interaction_msgs.srv.GoToPosture),
+            "say": rospy.ServiceProxy(say_srv, SpeakTo),
+            "get_route_region": rospy.ServiceProxy(get_route_region_srv, SemanticRoute),
+            "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
+            "has_mesh": rospy.ServiceProxy(has_mesh_srv, HasMesh),
+            "get_individual_info": rospy.ServiceProxy(get_individual_info_srv, standard_service),
+            "get_pointing_config": rospy.ServiceProxy(get_pointing_config_srv, PointingPlanner),
+            "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
+            "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
+            "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
+            "start_fact": rospy.ServiceProxy(start_fact_srv, StartFact),
+            "end_fact": rospy.ServiceProxy(start_fact_srv, EndFact),
+            "find_alternate_id": rospy.ServiceProxy(find_alternate_id_srv, FindAlternateId)}
+            # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
+            # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
 
         # Build Guiding Container
         self.guiding_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'],
@@ -541,6 +541,7 @@ class GuidingAction(object):
         human going from his start pose to the expected pose. A False means that the calling HumanMonitorTrack state
         will return 'invalid'
         """
+        rospy.logwarn("track perceive monitor")
         perceived = False
         for fact in msg.facts:
             if fact.predicate == "isPerceiving" and fact.object_name == userdata.person_frame \
@@ -549,13 +550,17 @@ class GuidingAction(object):
 
         if not perceived:
             self.count += 1
+            rospy.logwarn("track perceive monitor %d", self.count)
         else:
+            rospy.logwarn("track perceive monitor return valid")
             return True
 
-        if self.count > 15:
+        if self.count > 8:
             self.count = 0
+            rospy.logwarn("track perceive monitor return invalid")
             return False
         else:
+            rospy.logwarn("track perceive monitor return valid")
             return True
 
     # ------ Callback to handle the monitoring of if the target is visible by the human or not ------ #
