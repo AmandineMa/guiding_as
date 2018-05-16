@@ -38,7 +38,8 @@ ROBOT_PLACE = ""
 POINTING_DURATION = 0
 WORLD = ""
 STOP_TRACK_DIST_TH = 0
-SHOULD_MOVE_DIST_TH = 0
+HUMAN_SHOULD_MOVE_DIST_TH = 0
+ROBOT_SHOULD_MOVE_DIST_TH = 0
 TAKE_ROBOT_PLACE_DIST_TH = 0
 LOST_PERCEPTION_TIMEOUT = 0
 OBSERVE_LANDMARK_TIMEOUT = 0
@@ -97,8 +98,10 @@ class GuidingAction(object):
         POINTING_DURATION = rospy.get_param('/tuning_param/pointing_duration')
         global STOP_TRACK_DIST_TH
         STOP_TRACK_DIST_TH = rospy.get_param('/tuning_param/stop_tracking_dist_th')
-        global SHOULD_MOVE_DIST_TH
-        SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/should_move_dist_th')
+        global HUMAN_SHOULD_MOVE_DIST_TH
+        HUMAN_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/human_should_move_dist_th')
+        global ROBOT_SHOULD_MOVE_DIST_TH
+        ROBOT_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/robot_should_move_dist_th')
         global TAKE_ROBOT_PLACE_DIST_TH
         TAKE_ROBOT_PLACE_DIST_TH = rospy.get_param('/tuning_param/take_robot_place_dist_th')
         global LOST_PERCEPTION_TIMEOUT
@@ -106,68 +109,68 @@ class GuidingAction(object):
         global OBSERVE_LANDMARK_TIMEOUT
         OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/tuning_param/observe_landmark_timeout')
 
-        rospy.loginfo("waiting for service " + stand_pose_srv)
-        rospy.wait_for_service(stand_pose_srv)
-
-        rospy.loginfo("waiting for service " + say_srv)
-        rospy.wait_for_service(say_srv)
-
-        rospy.loginfo("waiting for service " + get_route_region_srv)
-        rospy.wait_for_service(get_route_region_srv)
-
-        rospy.loginfo("waiting for service " + get_route_description_srv)
-        rospy.wait_for_service(get_route_description_srv)
-
-        rospy.loginfo("waiting for service " + has_mesh_srv)
-        rospy.wait_for_service(has_mesh_srv)
-
-        rospy.loginfo("waiting for service " + get_individual_info_srv)
-        rospy.wait_for_service(get_individual_info_srv)
-
-        rospy.loginfo("waiting for service " + get_pointing_config_srv)
-        rospy.wait_for_service(get_pointing_config_srv)
-
-        rospy.loginfo("waiting for service " + look_at_srv)
-        rospy.wait_for_service(look_at_srv)
-
-        rospy.loginfo("waiting for service " + point_at_srv)
-        rospy.wait_for_service(point_at_srv)
-
-        rospy.loginfo("waiting for service " + monitor_humans_srv)
-        rospy.wait_for_service(monitor_humans_srv)
-
-        rospy.loginfo("waiting for service " + start_fact_srv)
-        rospy.wait_for_service(start_fact_srv)
-
-        rospy.loginfo("waiting for service " + end_fact_srv)
-        rospy.wait_for_service(end_fact_srv)
-
-        rospy.loginfo("waiting for service " + find_alternate_id_srv)
-        rospy.wait_for_service(find_alternate_id_srv)
-
-        # rospy.loginfo("waiting for service " + activate_dialogue_srv)
-        # rospy.wait_for_service(activate_dialogue_srv)
+        # rospy.loginfo("waiting for service " + stand_pose_srv)
+        # rospy.wait_for_service(stand_pose_srv)
         #
-        # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
-        # rospy.wait_for_service(deactivate_dialogue_srv)
-
-        GuidingAction.services_proxy = {
-            "stand_pose": rospy.ServiceProxy(stand_pose_srv,
-                                             nao_interaction_msgs.srv.GoToPosture),
-            "say": rospy.ServiceProxy(say_srv, SpeakTo),
-            "get_route_region": rospy.ServiceProxy(get_route_region_srv, SemanticRoute),
-            "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
-            "has_mesh": rospy.ServiceProxy(has_mesh_srv, HasMesh),
-            "get_individual_info": rospy.ServiceProxy(get_individual_info_srv, standard_service),
-            "get_pointing_config": rospy.ServiceProxy(get_pointing_config_srv, PointingPlanner),
-            "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
-            "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
-            "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
-            "start_fact": rospy.ServiceProxy(start_fact_srv, StartFact),
-            "end_fact": rospy.ServiceProxy(start_fact_srv, EndFact),
-            "find_alternate_id": rospy.ServiceProxy(find_alternate_id_srv, FindAlternateId)}
-            # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
-            # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
+        # rospy.loginfo("waiting for service " + say_srv)
+        # rospy.wait_for_service(say_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_route_region_srv)
+        # rospy.wait_for_service(get_route_region_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_route_description_srv)
+        # rospy.wait_for_service(get_route_description_srv)
+        #
+        # rospy.loginfo("waiting for service " + has_mesh_srv)
+        # rospy.wait_for_service(has_mesh_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_individual_info_srv)
+        # rospy.wait_for_service(get_individual_info_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_pointing_config_srv)
+        # rospy.wait_for_service(get_pointing_config_srv)
+        #
+        # rospy.loginfo("waiting for service " + look_at_srv)
+        # rospy.wait_for_service(look_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + point_at_srv)
+        # rospy.wait_for_service(point_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + monitor_humans_srv)
+        # rospy.wait_for_service(monitor_humans_srv)
+        #
+        # rospy.loginfo("waiting for service " + start_fact_srv)
+        # rospy.wait_for_service(start_fact_srv)
+        #
+        # rospy.loginfo("waiting for service " + end_fact_srv)
+        # rospy.wait_for_service(end_fact_srv)
+        #
+        # rospy.loginfo("waiting for service " + find_alternate_id_srv)
+        # rospy.wait_for_service(find_alternate_id_srv)
+        #
+        # # rospy.loginfo("waiting for service " + activate_dialogue_srv)
+        # # rospy.wait_for_service(activate_dialogue_srv)
+        # #
+        # # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
+        # # rospy.wait_for_service(deactivate_dialogue_srv)
+        #
+        # GuidingAction.services_proxy = {
+        #     "stand_pose": rospy.ServiceProxy(stand_pose_srv,
+        #                                      nao_interaction_msgs.srv.GoToPosture),
+        #     "say": rospy.ServiceProxy(say_srv, SpeakTo),
+        #     "get_route_region": rospy.ServiceProxy(get_route_region_srv, SemanticRoute),
+        #     "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
+        #     "has_mesh": rospy.ServiceProxy(has_mesh_srv, HasMesh),
+        #     "get_individual_info": rospy.ServiceProxy(get_individual_info_srv, standard_service),
+        #     "get_pointing_config": rospy.ServiceProxy(get_pointing_config_srv, PointingPlanner),
+        #     "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
+        #     "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
+        #     "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
+        #     "start_fact": rospy.ServiceProxy(start_fact_srv, StartFact),
+        #     "end_fact": rospy.ServiceProxy(start_fact_srv, EndFact),
+        #     "find_alternate_id": rospy.ServiceProxy(find_alternate_id_srv, FindAlternateId)}
+        #     # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
+        #     # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
 
         # Build Guiding Container
         self.guiding_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'],
@@ -205,12 +208,16 @@ class GuidingAction(object):
 
                 smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
                                        transitions={'human_first': 'PointAndLookAtHumanFuturePlace',
-                                                    'no': 'MoveToPose1',
+                                                    'no': 'ShouldRobotMove1',
                                                     'robot_first': 'AskHumanToMoveAfter', 'aborted': 'show_failed',
                                                     'preempted': 'preempted'})
 
                 smach.StateMachine.add('AskHumanToMoveAfter', AskHumanToMoveAfter(),
-                                       transitions={'succeeded': 'MoveToPose2', 'preempted': 'preempted'})
+                                       transitions={'succeeded': 'ShouldRobotMove2', 'preempted': 'preempted'})
+
+                smach.StateMachine.add('ShouldRobotMove2', ShouldRobotMove(),
+                                       transitions={'yes': 'MoveToPose2', 'no': 'LookAtHumanAssumedPlace2',
+                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
 
                 smach.StateMachine.add('PointAndLookAtHumanFuturePlace', PointAndLookAtHumanFuturePlace(),
                                        transitions={'succeeded': 'HumanTracking', 'aborted': 'show_failed',
@@ -237,8 +244,12 @@ class GuidingAction(object):
                                                     'preempted': 'show_failed', 'aborted': 'show_failed'})
 
                 smach.StateMachine.add('LookAtHumanAssumedPlace1', LookAtHumanAssumedPlace(),
-                                       transitions={'succeeded': 'MoveToPose1', 'preempted': 'preempted',
+                                       transitions={'succeeded': 'ShouldRobotMove1', 'preempted': 'preempted',
                                                     'aborted': 'show_failed', 'look_again': 'LookAtHumanAssumedPlace1'})
+
+                smach.StateMachine.add('ShouldRobotMove1', ShouldRobotMove(),
+                                       transitions={'yes': 'MoveToPose1', 'no': 'LookAtHuman2',
+                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
 
                 smach.StateMachine.add('MoveToPose1', MoveToPose(),
                                        transitions={'succeeded': 'LookAtHuman2',
@@ -1020,7 +1031,7 @@ class ShouldHumanMove(smach.State):
                 return 'preempted'
 
             # if the distance is superior to the threshold, the human will be asked to move
-            if distance_h_now_h_future > SHOULD_MOVE_DIST_TH:
+            if distance_h_now_h_future > HUMAN_SHOULD_MOVE_DIST_TH:
                 try:
                     # calculate the distance between the robot actual pose and the human wanted pose
                     trans = self._tfBuffer.lookup_transform('map', 'base_footprint', rospy.Time(0))
@@ -1307,6 +1318,36 @@ class StopTrackingCondition(smach.State):
             return 'succeeded'
         else:
             return 'continue_tracking'
+
+
+class ShouldRobotMove(smach.State):
+    def __init__(self):
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['yes', 'no', 'preempted', 'aborted'],
+                             input_keys=['target_pose'])
+        self._tfBuffer = tf2_ros.Buffer()
+        self._listener = tf2_ros.TransformListener(self._tfBuffer)
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+        try:
+            trans = self._tfBuffer.lookup_transform('map', 'base_footprint', rospy.Time(0))
+            distance_r_now_r_future = math.sqrt(
+                (trans.transform.translation.x - userdata.target_pose.pose.position.x) ** 2 +
+                (trans.transform.translation.y - userdata.target_pose.pose.position.y) ** 2)
+            if distance_r_now_r_future > ROBOT_SHOULD_MOVE_DIST_TH:
+                return 'yes'
+            else:
+                return 'no'
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            rospy.logerr('tf exception')
+            return 'aborted'
 
 
 class MoveToPose(smach_ros.SimpleActionState):

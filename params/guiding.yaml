@@ -31,7 +31,8 @@ action_servers:
 tuning_param:
   pointing_duration: 1.5 #seconds
   stop_tracking_dist_th: 0.3 #meters
-  should_move_dist_th: 0.5 #meters
+  human_should_move_dist_th: 0.5 #meters
+  robot_should_move_dist_th: 0.5 #meters
   take_robot_place_dist_th: 0.6 #meters
   lost_perception_timeout: 10 #seconds
   observe_landmark_timeout: 4 #seconds
