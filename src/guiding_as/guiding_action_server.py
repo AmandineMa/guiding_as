@@ -941,6 +941,9 @@ class PointingConfig(smach.State):
 
         try:
             # call the pointing planner service
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                "Wait, I am thinking",
+                                                SPEECH_PRIORITY)
             get_pointing_config = GuidingAction.services_proxy["get_pointing_config"](
                 target_frame,
                 direction_landmark,
