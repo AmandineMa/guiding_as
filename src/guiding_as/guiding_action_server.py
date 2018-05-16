@@ -482,8 +482,10 @@ class GuidingAction(object):
             return 'task_succeeded'
         elif outcome_map['GUIDING'] == 'task_failed':
             return 'task_failed'
-        else:
+        elif outcome_map['HUMAN_MONITOR'] == 'invalid':
             return 'human_lost'
+        else:
+            return 'task_failed'
 
     def human_tracking_term_cb(self, outcome_map):
         """Callback that terminates the HumanTracking concurrent container in either of those cases:
