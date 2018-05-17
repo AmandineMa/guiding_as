@@ -242,6 +242,7 @@ class GuidingAction(object):
                     smach.Concurrence.add('HumanMonitorTrack',
                                           smach_ros.MonitorState("/base/current_facts", FactArrayStamped,
                                                                  self.human_track_perceive_monitor_cb,
+                                                                 max_checks=1,
                                                                  input_keys=['person_frame']))
 
                 smach.StateMachine.add('HumanTracking', human_tracking_concurrence,
@@ -515,6 +516,7 @@ class GuidingAction(object):
 
         TODO: add the preempted and aborted cases
         """
+        rospy.logerr("outcome HumanMonitorTrack %s", outcome_map['HumanMonitorTrack'])
         if (outcome_map['StopTrackingCondition'] == 'continue_tracking' and outcome_map[
             'LookAtHumanTrack'] == 'succeeded') and outcome_map['HumanMonitorTrack'] =='valid' \
                 or outcome_map['StopTrackingCondition'] == 'succeeded' or outcome_map['HumanMonitorTrack'] == 'invalid':
@@ -555,19 +557,20 @@ class GuidingAction(object):
                 perceived = True
 
         if not perceived:
-            self.count += 1
-            rospy.logwarn("track perceive monitor %d", self.count)
+            return False
+            # self.count += 1
+            # rospy.logwarn("track perceive monitor %d", self.count)
         else:
-            rospy.logwarn("track perceive monitor return valid")
+            # rospy.logwarn("track perceive monitor return valid - perceived")
             return True
 
-        if self.count > 8:
-            self.count = 0
-            rospy.logwarn("track perceive monitor return invalid")
-            return False
-        else:
-            rospy.logwarn("track perceive monitor return valid")
-            return True
+        # if self.count > 7:
+        #     self.count = 0
+        #     rospy.logwarn("track perceive monitor return invalid")
+        #     return False
+        # else:
+        #     rospy.logwarn("track perceive monitor return valid")
+        #     return True
 
     # ------ Callback to handle the monitoring of if the target is visible by the human or not ------ #
 
@@ -931,7 +934,7 @@ class PointingConfig(smach_ros.SimpleActionState):
                                              input_keys=['target_frame', 'person_frame', 'route', 'human_look_at_point',
                                                          'landmarks_to_point'],
                                              output_keys=['target_pose', 'landmarks_to_point', 'human_pose'],
-                                             server_wait_timeout=rospy.Duration(2))
+                                             server_wait_timeout=rospy.Duration(5))
 
     def get_name(self):
         return self.__class__.__name__
@@ -968,21 +971,24 @@ class PointingConfig(smach_ros.SimpleActionState):
                                                 SPEECH_PRIORITY)
 
     def pointing_config_result_cb(self, userdata, status, result):
-        # write in the userdata
-        userdata.target_pose = result.robot_pose
-        userdata.human_pose = result.human_pose
-        # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
-        if userdata.target_frame in result.pointed_landmarks:
-            userdata.landmarks_to_point.append(userdata.target_frame)
-        if self.direction_landmark in result.pointed_landmarks:
-            userdata.landmarks_to_point.append(self.direction_landmark)
+        if status == actionlib.GoalStatus.SUCCEEDED:
+            # write in the userdata
+            userdata.target_pose = result.robot_pose
+            userdata.human_pose = result.human_pose
+            # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
+            if userdata.target_frame in result.pointed_landmarks:
+                userdata.landmarks_to_point.append(userdata.target_frame)
+            if self.direction_landmark in result.pointed_landmarks:
+                userdata.landmarks_to_point.append(self.direction_landmark)
 
-        if self.preempt_requested():
-            rospy.loginfo(self.get_name() + " preempted")
-            self.service_preempt()
-            return 'preempted'
+            if self.preempt_requested():
+                rospy.loginfo(self.get_name() + " preempted")
+                self.service_preempt()
+                return 'preempted'
 
-        return 'succeeded'
+            return 'succeeded'
+        else:
+            return 'aborted'
 
 
 class DispatchPointingPlannerResult(smach.State):
@@ -1280,14 +1286,15 @@ class LookAtHumanAssumedPlace(smach.State):
         GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         # if the human is not perceived for less than 3 times
-        if not human_perceived and self.does_not_see < 2:
+        if not human_perceived and self.does_not_see < 1:
+            rospy.sleep(2.0)
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "I am sorry, I cannot see you. Can you come in front of me ?",
+                                                "I am sorry, I cannot see you. Where are you ?",
                                                 SPEECH_PRIORITY)
             self.does_not_see += 1
             # wait a bit before checking again
             rospy.logwarn("wait human to come in front of it")
-            rospy.sleep(3.0)
+            rospy.sleep(2.0)
             return 'look_again'
         # if the human is still not perceived
         # (It can happen if the human is in front of the robot but its ID changed - Maybe the interaction should
@@ -1354,7 +1361,7 @@ class StopTrackingCondition(smach.State):
         distance = math.sqrt((trans.transform.translation.x - userdata.human_pose.pose.position.x) ** 2 +
                              (trans.transform.translation.y - userdata.human_pose.pose.position.y) ** 2)
         # if the wanted pose is reached (+/- a certain threshold)
-        if distance < STOP_TRACK_DIST_TH:
+        if distance < STOP_TRACK_DIST_TH :
             return 'succeeded'
         else:
             return 'continue_tracking'
@@ -2229,6 +2236,7 @@ class Failure(smach.State):
 
 if __name__ == '__main__':
     rospy.init_node('guiding_action_server')
-    server = GuidingAction(rospy.get_name())
+    server = GuidingAction('/task_route_descr')
+    # server = GuidingAction(rospy.get_name())
     rospy.on_shutdown(server.stand_pose)
     rospy.spin()
