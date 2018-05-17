@@ -961,9 +961,11 @@ class PointingConfig(smach_ros.SimpleActionState):
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
-        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                            "Wait, I am thinking",
-                                            SPEECH_PRIORITY)
+        rospy.logwarn(feedback)
+        if feedback.state == 1:
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                "Wait, I am thinking",
+                                                SPEECH_PRIORITY)
 
     def pointing_config_result_cb(self, userdata, status, result):
         # write in the userdata
