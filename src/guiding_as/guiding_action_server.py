@@ -204,7 +204,12 @@ class GuidingAction(object):
 
             with show_sm:
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
-                                       transitions={'succeeded': 'ShouldHumanMove', 'aborted': 'show_failed',
+                                       transitions={'succeeded': 'DispatchPointingPlannerResult',
+                                                    'aborted': 'show_failed',
+                                                    'preempted': 'preempted'})
+
+                smach.StateMachine.add('DispatchPointingPlannerResult', DispatchPointingPlannerResult(),
+                                       transitions={'succeeded': 'ShouldHumanMove',
                                                     'preempted': 'preempted', 'point_not_visible': 'SelectLandmark'})
 
                 smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
@@ -956,10 +961,9 @@ class PointingConfig(smach_ros.SimpleActionState):
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
-        if feedback == True:
-            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "Wait, I am thinking",
-                                                SPEECH_PRIORITY)
+        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                            "Wait, I am thinking",
+                                            SPEECH_PRIORITY)
 
     def pointing_config_result_cb(self, userdata, status, result):
         # write in the userdata
@@ -976,7 +980,32 @@ class PointingConfig(smach_ros.SimpleActionState):
             self.service_preempt()
             return 'preempted'
 
-        if len(result.pointed_landmarks) == 0:
+        return 'succeeded'
+
+
+class DispatchPointingPlannerResult(smach.State):
+
+    def __init__(self):
+        """Constructor for ShouldHumanMove state
+
+        It calls the super constructor of L{smach.State} and define the outcomes, the input_keys, the output_keys
+        and the io_keys of the state.
+
+        """
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['succeeded', 'point_not_visible', 'preempted'],
+                             input_keys=['landmarks_to_point'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+
+        if len(userdata.landmarks_to_point) == 0:
             return 'point_not_visible'
         else:
             return 'succeeded'
