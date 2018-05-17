@@ -27,6 +27,7 @@ topics:
 action_servers:
   move_to: m_move_to
   dialogue: dialogue_as
+  pointing_planner: pointing_planner/PointingPlanner
 
 tuning_param:
   pointing_duration: 1.5 #seconds

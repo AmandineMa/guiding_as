@@ -19,6 +19,7 @@ from guiding_as.msg import *
 from dialogue_as.msg import *
 from deictic_gestures.srv import *
 from mummer_integration_msgs.srv import *
+from mummer_integration_msgs.msg import *
 from semantic_route_description.srv import *
 from perspectives_msgs.srv import *
 from ontologenius.srv import *
@@ -876,7 +877,7 @@ class AskShowDirection(smach.State):
         return 'succeeded'
 
 
-class PointingConfig(smach.State):
+class PointingConfig(smach_ros.SimpleActionState):
     """Calls the pointing planner to get the best configuration (pose) for the human and the robot
 
     It extracts the first passage from the route returned by the route planner (route[1])
@@ -917,23 +918,27 @@ class PointingConfig(smach.State):
 
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
-        smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted', 'point_not_visible'],
-                             input_keys=['target_frame', 'person_frame', 'route', 'human_look_at_point', 'landmarks_to_point'],
-                             output_keys=['target_pose', 'landmarks_to_point', 'human_pose'])
+        self.direction_landmark = ""
+        smach_ros.SimpleActionState.__init__(self, rospy.get_param("/action_servers/pointing_planner"),
+                                             PointingAction, goal_cb=self.pointing_config_goal_cb,
+                                             feedback_cb=self.pointing_config_feedback_cb,
+                                             result_cb=self.pointing_config_result_cb,
+                                             input_keys=['target_frame', 'person_frame', 'route', 'human_look_at_point',
+                                                         'landmarks_to_point'],
+                                             output_keys=['target_pose', 'landmarks_to_point', 'human_pose'],
+                                             server_wait_timeout=rospy.Duration(2))
 
     def get_name(self):
         return self.__class__.__name__
 
-    def execute(self, userdata):
-        """Does some tests, then calls the pointing planner service"""
+    def pointing_config_goal_cb(self, userdata, goal):
         GuidingAction.feedback.current_step = "get_pointing_config"
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
 
-        direction_landmark = ""
         target_frame = ""
         # if there is a direction landmark in the route list returned by the route planner
         if len(userdata.route) > 2:
-            direction_landmark = userdata.route[1]
+            self.direction_landmark = userdata.route[1]
 
         # Check if it exists an associated mesh to the target
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.target_frame)
@@ -944,42 +949,37 @@ class PointingConfig(smach.State):
             if has_mesh_result.has_mesh:
                 target_frame = userdata.target_frame
 
-        try:
-            # call the pointing planner service
+        pointing_planner_goal = PointingGoal()
+        pointing_planner_goal.human = userdata.person_frame
+        pointing_planner_goal.target_landmark = target_frame
+        pointing_planner_goal.direction_landmark = self.direction_landmark
+        return pointing_planner_goal
+
+    def pointing_config_feedback_cb(self, userdata, feedback):
+        if feedback == True:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                 "Wait, I am thinking",
                                                 SPEECH_PRIORITY)
-            get_pointing_config = GuidingAction.services_proxy["get_pointing_config"](
-                target_frame,
-                direction_landmark,
-                userdata.person_frame)
 
-            # write in the userdata
-            userdata.target_pose = get_pointing_config.robot_pose
-            userdata.human_pose = get_pointing_config.human_pose
-            # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
-            if userdata.target_frame in get_pointing_config.pointed_landmarks:
-                userdata.landmarks_to_point.append(userdata.target_frame)
-            if direction_landmark in get_pointing_config.pointed_landmarks:
-                userdata.landmarks_to_point.append(direction_landmark)
+    def pointing_config_result_cb(self, userdata, status, result):
+        # write in the userdata
+        userdata.target_pose = result.robot_pose
+        userdata.human_pose = result.human_pose
+        # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
+        if userdata.target_frame in result.pointed_landmarks:
+            userdata.landmarks_to_point.append(userdata.target_frame)
+        if self.direction_landmark in result.pointed_landmarks:
+            userdata.landmarks_to_point.append(self.direction_landmark)
 
-            if self.preempt_requested():
-                rospy.loginfo(self.get_name() + " preempted")
-                self.service_preempt()
-                return 'preempted'
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
 
-            if len(get_pointing_config.pointed_landmarks) == 0:
-                return 'point_not_visible'
-            else:
-                return 'succeeded'
-
-        except rospy.ServiceException, e:
-            rospy.logerr('exception')
-            rospy.logerr(e.message)
-            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "I am sorry, my pointing planner crashed !",
-                                                SPEECH_PRIORITY)
-            return 'aborted'
+        if len(result.pointed_landmarks) == 0:
+            return 'point_not_visible'
+        else:
+            return 'succeeded'
 
 
 class ShouldHumanMove(smach.State):
