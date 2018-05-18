@@ -204,13 +204,10 @@ class GuidingAction(object):
 
             with show_sm:
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
-                                       transitions={'succeeded': 'DispatchPointingPlannerResult',
+                                       transitions={'succeeded': 'ShouldHumanMove',
+                                                    'point_not_visible': 'SelectLandmark',
                                                     'aborted': 'show_failed',
                                                     'preempted': 'preempted'})
-
-                smach.StateMachine.add('DispatchPointingPlannerResult', DispatchPointingPlannerResult(),
-                                       transitions={'succeeded': 'ShouldHumanMove',
-                                                    'preempted': 'preempted', 'point_not_visible': 'SelectLandmark'})
 
                 smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
                                        transitions={'human_first': 'PointAndLookAtHumanFuturePlace',
@@ -970,6 +967,7 @@ class PointingConfig(smach_ros.SimpleActionState):
                                                 "Wait, I am thinking",
                                                 SPEECH_PRIORITY)
 
+    @smach.cb_interface(outcomes=['point_not_visible'])
     def pointing_config_result_cb(self, userdata, status, result):
         if status == actionlib.GoalStatus.SUCCEEDED:
             # write in the userdata
@@ -986,37 +984,12 @@ class PointingConfig(smach_ros.SimpleActionState):
                 self.service_preempt()
                 return 'preempted'
 
-            return 'succeeded'
+            if len(userdata.landmarks_to_point) == 0:
+                return 'point_not_visible'
+            else:
+                return 'succeeded'
         else:
             return 'aborted'
-
-
-class DispatchPointingPlannerResult(smach.State):
-
-    def __init__(self):
-        """Constructor for ShouldHumanMove state
-
-        It calls the super constructor of L{smach.State} and define the outcomes, the input_keys, the output_keys
-        and the io_keys of the state.
-
-        """
-        rospy.loginfo("Initialization of " + self.get_name() + " state")
-        smach.State.__init__(self, outcomes=['succeeded', 'point_not_visible', 'preempted'],
-                             input_keys=['landmarks_to_point'])
-
-    def get_name(self):
-        return self.__class__.__name__
-
-    def execute(self, userdata):
-        if self.preempt_requested():
-            rospy.loginfo(self.get_name() + " preempted")
-            self.service_preempt()
-            return 'preempted'
-
-        if len(userdata.landmarks_to_point) == 0:
-            return 'point_not_visible'
-        else:
-            return 'succeeded'
 
 
 class ShouldHumanMove(smach.State):
