@@ -2235,7 +2235,6 @@ class Failure(smach.State):
 
 if __name__ == '__main__':
     rospy.init_node('guiding_action_server')
-    server = GuidingAction('/task_route_descr')
-    # server = GuidingAction(rospy.get_name())
+    server = GuidingAction(rospy.get_name())
     rospy.on_shutdown(server.stand_pose)
     rospy.spin()
