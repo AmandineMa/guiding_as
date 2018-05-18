@@ -1287,7 +1287,6 @@ class LookAtHumanAssumedPlace(smach.State):
 
         # if the human is not perceived for less than 3 times
         if not human_perceived and self.does_not_see < 1:
-            rospy.sleep(2.0)
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                 "I am sorry, I cannot see you. Where are you ?",
                                                 SPEECH_PRIORITY)
