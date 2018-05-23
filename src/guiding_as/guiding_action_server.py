@@ -202,6 +202,7 @@ class GuidingAction(object):
                                                      'last_state', 'last_outcome', 'landmarks_to_point'],
                                          output_keys=['last_state', 'last_outcome', 'person_frame'])
 
+
             with show_sm:
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
                                        transitions={'succeeded': 'ShouldHumanMove',
@@ -914,6 +915,7 @@ class PointingConfig(smach_ros.SimpleActionState):
     - preempted: the state has been preempted
     - aborted: the pointing planner raised an exception or returned an empty list of visible landmarks
     """
+    direction_landmark = ""
 
     def __init__(self):
         """Constructor for PointingConfig state
@@ -928,8 +930,7 @@ class PointingConfig(smach_ros.SimpleActionState):
                                              PointingAction, goal_cb=self.pointing_config_goal_cb,
                                              feedback_cb=self.pointing_config_feedback_cb,
                                              result_cb=self.pointing_config_result_cb,
-                                             input_keys=['target_frame', 'person_frame', 'route', 'human_look_at_point',
-                                                         'landmarks_to_point'],
+                                             input_keys=['target_frame', 'person_frame', 'route', 'human_look_at_point'],
                                              output_keys=['target_pose', 'landmarks_to_point', 'human_pose'],
                                              server_wait_timeout=rospy.Duration(5))
 
@@ -943,7 +944,7 @@ class PointingConfig(smach_ros.SimpleActionState):
         target_frame = ""
         # if there is a direction landmark in the route list returned by the route planner
         if len(userdata.route) > 2:
-            self.direction_landmark = userdata.route[1]
+            PointingConfig.direction_landmark = userdata.route[1]
 
         # Check if it exists an associated mesh to the target
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.target_frame)
@@ -957,7 +958,7 @@ class PointingConfig(smach_ros.SimpleActionState):
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
         pointing_planner_goal.target_landmark = target_frame
-        pointing_planner_goal.direction_landmark = self.direction_landmark
+        pointing_planner_goal.direction_landmark = PointingConfig.direction_landmark
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
@@ -967,8 +968,10 @@ class PointingConfig(smach_ros.SimpleActionState):
                                                 "Wait, I am thinking",
                                                 SPEECH_PRIORITY)
 
-    @smach.cb_interface(outcomes=['point_not_visible'])
-    def pointing_config_result_cb(self, userdata, status, result):
+    @staticmethod
+    @smach.cb_interface(outcomes=['point_not_visible'], input_keys=['target_frame', 'landmarks_to_point'],
+                        output_keys=['target_pose', 'landmarks_to_point', 'human_pose'])
+    def pointing_config_result_cb(userdata, status, result):
         if status == actionlib.GoalStatus.SUCCEEDED:
             # write in the userdata
             userdata.target_pose = result.robot_pose
@@ -976,13 +979,13 @@ class PointingConfig(smach_ros.SimpleActionState):
             # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
             if userdata.target_frame in result.pointed_landmarks:
                 userdata.landmarks_to_point.append(userdata.target_frame)
-            if self.direction_landmark in result.pointed_landmarks:
-                userdata.landmarks_to_point.append(self.direction_landmark)
+            if PointingConfig.direction_landmark in result.pointed_landmarks:
+                userdata.landmarks_to_point.append(PointingConfig.direction_landmark)
 
-            if self.preempt_requested():
-                rospy.loginfo(self.get_name() + " preempted")
-                self.service_preempt()
-                return 'preempted'
+            # if self.preempt_requested():
+            #     rospy.loginfo(self.get_name() + " preempted")
+            #     self.service_preempt()
+            #     return 'preempted'
 
             if len(userdata.landmarks_to_point) == 0:
                 return 'point_not_visible'
