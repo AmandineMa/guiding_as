@@ -25,6 +25,7 @@ from route_description_msgs.srv import *
 from speech_wrapper_msgs.srv import *
 from multimodal_human_monitor_msgs.srv import *
 from head_manager_msgs.msg import *
+from pointing_planner_msgs.srv import *
 from pointing_planner_msgs.msg import *
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
@@ -156,7 +157,7 @@ class GuidingAction(object):
 
         GuidingAction.services_proxy = {
             "stand_pose": rospy.ServiceProxy(stand_pose_srv,
-                                             nao_interaction_msgs.srv.GoToPosture),
+                                             GoToPosture),
             "say": rospy.ServiceProxy(say_srv, SpeakTo),
             "get_route_region": rospy.ServiceProxy(get_route_region_srv, SemanticRoute),
             "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
