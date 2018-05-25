@@ -17,16 +17,15 @@ from perspectives_msgs.msg import *
 from std_srvs.srv import Trigger
 from guiding_as.msg import *
 from dialogue_as.msg import *
-from deictic_gestures.srv import *
-from mummer_integration_msgs.srv import *
-from mummer_integration_msgs.msg import *
-from semantic_route_description.srv import *
+from deictic_gestures_msgs.srv import *
+from semantic_route_description_msgs.srv import *
 from perspectives_msgs.srv import *
-from ontologenius.srv import *
-from route_description.srv import *
-from speech_wrapper.srv import *
-from multimodal_human_monitor.srv import *
-from head_manager.msg import *
+from ontologenius_msgs.srv import *
+from route_description_msgs.srv import *
+from speech_wrapper_msgs.srv import *
+from multimodal_human_monitor_msgs.srv import *
+from head_manager_msgs.msg import *
+from pointing_planner_msgs.msg import *
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
            'DispatchYesNoCL', 'Failure', 'GetRouteRegion', 'GetYesNo', 'GuidingAction', 'HumanLost', 'IsOver',
