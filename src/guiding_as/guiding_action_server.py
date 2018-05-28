@@ -25,7 +25,6 @@ from route_description_msgs.srv import *
 from speech_wrapper_msgs.srv import *
 from multimodal_human_monitor_msgs.srv import *
 from head_manager_msgs.msg import *
-from pointing_planner_msgs.srv import *
 from pointing_planner_msgs.msg import *
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
@@ -77,7 +76,6 @@ class GuidingAction(object):
         get_route_region_srv = rospy.get_param('/services/get_route_region')
         get_route_description_srv = rospy.get_param('/services/get_route_description')
         get_individual_info_srv = rospy.get_param('/services/get_individual_info')
-        get_pointing_config_srv = rospy.get_param('/services/get_pointing_config')
         look_at_srv = rospy.get_param('/services/look_at')
         point_at_srv = rospy.get_param('/services/point_at')
         has_mesh_srv = rospy.get_param('/services/has_mesh')
@@ -128,9 +126,6 @@ class GuidingAction(object):
         rospy.loginfo("waiting for service " + get_individual_info_srv)
         rospy.wait_for_service(get_individual_info_srv)
 
-        rospy.loginfo("waiting for service " + get_pointing_config_srv)
-        rospy.wait_for_service(get_pointing_config_srv)
-
         rospy.loginfo("waiting for service " + look_at_srv)
         rospy.wait_for_service(look_at_srv)
 
@@ -163,7 +158,6 @@ class GuidingAction(object):
             "get_route_description": rospy.ServiceProxy(get_route_description_srv, GetRouteDescription),
             "has_mesh": rospy.ServiceProxy(has_mesh_srv, HasMesh),
             "get_individual_info": rospy.ServiceProxy(get_individual_info_srv, standard_service),
-            "get_pointing_config": rospy.ServiceProxy(get_pointing_config_srv, PointingPlanner),
             "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
             "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
             "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
