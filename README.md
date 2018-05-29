@@ -64,6 +64,6 @@ To visualize the state machine and its states:
 rosrun smach_viewer smach_viewer.py
 ```
 
-![state machine overview](img/state_machine1.png)
-![state machine overview](img/show_state_machine.png)
+![state machine overview](img/global_graph.svg)
+![state machine overview](img/show.svg)
 
