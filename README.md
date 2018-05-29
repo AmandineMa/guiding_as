@@ -87,8 +87,11 @@ rosrun smach_viewer smach_viewer.py
 
 # Sources
 https://github.com/LAAS-HRI/perspectives
+
 https://github.com/LAAS-HRI/semantic_route_description
+
 https://github.com/LAAS-HRI/mummer_integration/tree/master/navigation
+
 https://github.com/LAAS-HRI/move4d_ros_docker
 
 # State machine diagrams
