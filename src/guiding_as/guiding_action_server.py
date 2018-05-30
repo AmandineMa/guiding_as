@@ -71,6 +71,8 @@ class GuidingAction(object):
         GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
                                                                    execute_cb=self.execute_cb,
                                                                    auto_start=False)
+        GuidingAction.action_server.register_preempt_callback(self.preempt_cb)
+
         stand_pose_srv = rospy.get_param('/services/stand_pose')
         say_srv = rospy.get_param('/services/say')
         get_route_region_srv = rospy.get_param('/services/get_route_region')
@@ -195,7 +197,6 @@ class GuidingAction(object):
                                          input_keys=['target_frame', 'person_frame', 'human_look_at_point', 'route',
                                                      'last_state', 'last_outcome', 'landmarks_to_point'],
                                          output_keys=['last_state', 'last_outcome', 'person_frame'])
-
 
             with show_sm:
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
@@ -372,7 +373,7 @@ class GuidingAction(object):
         self.guiding_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
         self.guiding_sm.register_termination_cb(self.term_cb, cb_args=[])
         show_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
-        show_sm.register_transition_cb(self.guiding_start_cb, cb_args=[show_sm])
+        show_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[show_sm])
         check_landmark_seen_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[check_landmark_seen_sm])
 
         self.sis = smach_ros.IntrospectionServer('server_name', self.top_sm, '/SM_ROOT')
@@ -404,7 +405,8 @@ class GuidingAction(object):
         """Callback to return the failure reason to the action server client"""
         if terminal_states[0] == 'Failure':
             self._result.failure_reason = userdata.last_state
-            GuidingAction.action_server.set_aborted(self._result)
+            if GuidingAction.action_server.is_active():
+                GuidingAction.action_server.set_aborted(self._result)
 
     human_lost = False
     time_lost = 0
@@ -594,6 +596,13 @@ class GuidingAction(object):
         else:
             return 'not_detected'
 
+    def preempt_cb(self):
+        rospy.logerr("in preempt_cb")
+        if GuidingAction.action_server.is_preempt_requested() and GuidingAction.action_server.is_active():
+            rospy.logerr("preempted")
+            self.top_sm.request_preempt()
+            GuidingAction.action_server.set_preempted()
+
     def execute_cb(self, goal):
         """ Execute the nested state machines
         Userdata of the state machines:
@@ -612,6 +621,7 @@ class GuidingAction(object):
         - last_outcome: Outcome returned by the last state the machine was in
         - last_state: Last active state the machine was in
         """
+        rospy.logdebug("test")
         self.top_sm.set_initial_state(['GUIDING_MONITORING'])
         # userdata which needs to be initiate
         self.top_sm.userdata.person_frame = goal.person_frame
@@ -663,7 +673,8 @@ class GuidingAction(object):
             else:
                 self._result.failure_reason = self.guiding_sm.userdata.last_state
 
-        GuidingAction.action_server.set_succeeded(self._result)
+        if GuidingAction.action_server.is_active():
+            GuidingAction.action_server.set_succeeded(self._result)
 
         self.sis.stop()
 
@@ -980,7 +991,9 @@ class PointingConfig(smach_ros.SimpleActionState):
             #     rospy.loginfo(self.get_name() + " preempted")
             #     self.service_preempt()
             #     return 'preempted'
-
+            rospy.logwarn("sleep")
+            rospy.sleep(5.0)
+            rospy.logwarn("end sleep")
             if len(userdata.landmarks_to_point) == 0:
                 return 'point_not_visible'
             else:
