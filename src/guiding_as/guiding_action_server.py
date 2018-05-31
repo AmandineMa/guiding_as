@@ -10,6 +10,7 @@ import actionlib
 import smach
 import smach_ros
 import copy
+from collections import namedtuple
 from nao_interaction_msgs.srv import *
 from move_base_msgs.msg import *
 from geometry_msgs.msg import *
@@ -67,6 +68,12 @@ class GuidingAction(object):
 
     def __init__(self, name):
         self._action_name = name
+        self.waiting_goals = []
+        self.top_userdata = None
+        self.guiding_userdata = None
+        self.show_userdata = None
+        self.SavedGoal = namedtuple("SavedGoal", "target_frame person_frame")
+        self.SavedEnv = namedtuple("SavedEnv", "goal interrupted_state top_ud guiding_ud show_ud")
 
         GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
                                                                    execute_cb=self.execute_cb,
@@ -193,12 +200,12 @@ class GuidingAction(object):
             smach.StateMachine.add('DispatchYesNo', DispatchYesNo(),
                                    transitions={'show': 'Show', 'no': 'task_succeeded', 'preempted': 'preempted'})
 
-            show_sm = smach.StateMachine(outcomes=['show_succeeded', 'show_failed', 'preempted'],
+            self.show_sm = smach.StateMachine(outcomes=['show_succeeded', 'show_failed', 'preempted'],
                                          input_keys=['target_frame', 'person_frame', 'human_look_at_point', 'route',
                                                      'last_state', 'last_outcome', 'landmarks_to_point'],
                                          output_keys=['last_state', 'last_outcome', 'person_frame'])
 
-            with show_sm:
+            with self.show_sm:
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
                                        transitions={'succeeded': 'ShouldHumanMove',
                                                     'point_not_visible': 'SelectLandmark',
@@ -340,7 +347,7 @@ class GuidingAction(object):
                                        transitions={'succeeded': 'show_succeeded', 'point_direction': 'SelectLandmark',
                                                     'preempted': 'preempted', 'aborted': 'show_failed'})
 
-            smach.StateMachine.add('Show', show_sm, transitions={'show_succeeded': 'task_succeeded',
+            smach.StateMachine.add('Show', self.show_sm, transitions={'show_succeeded': 'task_succeeded',
                                                                  'show_failed': 'Failure', 'preempted': 'preempted'})
 
             # Every state which failed transitions to this state
@@ -372,8 +379,8 @@ class GuidingAction(object):
         self.guiding_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[self.guiding_sm])
         self.guiding_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
         self.guiding_sm.register_termination_cb(self.term_cb, cb_args=[])
-        show_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
-        show_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[show_sm])
+        self.show_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
+        self.show_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[self.show_sm])
         check_landmark_seen_sm.register_transition_cb(self.guiding_transition_cb, cb_args=[check_landmark_seen_sm])
 
         self.sis = smach_ros.IntrospectionServer('server_name', self.top_sm, '/SM_ROOT')
@@ -596,10 +603,26 @@ class GuidingAction(object):
         else:
             return 'not_detected'
 
+    # ------ Callbacks to handle the action server ------ #
+
     def preempt_cb(self):
-        rospy.logerr("in preempt_cb")
+        if GuidingAction.action_server.is_new_goal_available():
+            rospy.logwarn("A new goal arrived. The state machine stopped in state %s", next_state)
+            goal = self.SavedGoal(self.guiding_sm.userdata.target_frame, self.top_sm.userdata.person_frame)
+
+            top_ud = smach.UserData()
+            top_ud.update(self.top_sm.userdata)
+
+            guiding_ud = smach.UserData()
+            guiding_ud.update(self.guiding_sm.userdata)
+
+            show_ud = smach.UserData()
+            show_ud.update(self.show_sm.userdata)
+
+            saved_goal = self.SavedEnv(goal, next_state, top_ud, guiding_ud, show_ud)
+            self.waiting_goals.append(saved_goal)
+
         if GuidingAction.action_server.is_preempt_requested() and GuidingAction.action_server.is_active():
-            rospy.logerr("preempted")
             self.top_sm.request_preempt()
             GuidingAction.action_server.set_preempted()
 
@@ -621,11 +644,49 @@ class GuidingAction(object):
         - last_outcome: Outcome returned by the last state the machine was in
         - last_state: Last active state the machine was in
         """
-        rospy.logdebug("test")
-        self.top_sm.set_initial_state(['GUIDING_MONITORING'])
-        # userdata which needs to be initiate
-        self.top_sm.userdata.person_frame = goal.person_frame
-        self.guiding_sm.userdata.target_frame = goal.place_frame
+        start_waiting_goal = False
+        if len(self.waiting_goals) != 0:
+            for i in self.waiting_goals:
+                if goal.place_frame in getattr(i, "goal") \
+                        and goal.person_frame in getattr(i, "goal"):
+
+                    self.top_sm.userdata = getattr(i, "top_ud")
+                    self.guiding_sm.userdata = getattr(i, "guiding_ud")
+                    self.show_sm.userdata = getattr(i, "show_ud")
+
+                    self.top_sm.set_initial_state([getattr(i, "interrupted_state")])
+
+                    try:
+                        rospy.logwarn("An InvalidTransitionError could be raised, it has to be ignore")
+                        self.top_sm.check_consistency()
+
+                    except smach.InvalidTransitionError:
+                        self.top_sm.set_initial_state(['GUIDING_MONITORING'])
+                        self.guiding_sm.set_initial_state([getattr(i, "interrupted_state")])
+                        try:
+                            rospy.logwarn("An InvalidTransitionError could be raised, it has to be ignore")
+                            self.guiding_sm.check_consistency()
+                        except smach.InvalidTransitionError:
+                            self.guiding_sm.set_initial_state(['Show'])
+                            self.show_sm.set_initial_state([getattr(i, "interrupted_state")])
+                    start_waiting_goal = True
+                    self.waiting_goals.remove(i)
+
+        if not start_waiting_goal:
+            self.top_sm.set_initial_state(['GUIDING_MONITORING'])
+            self.guiding_sm.set_initial_state(['GetRouteRegion'])
+            self.show_sm.set_initial_state(['PointingConfig'])
+            # userdata which needs to be initialized
+            self.top_sm.userdata.person_frame = goal.person_frame
+            self.guiding_sm.userdata.target_frame = goal.place_frame
+            look_at_point = PointStamped()
+            look_at_point.header.frame_id = self.top_sm.userdata.person_frame
+            self.top_sm.userdata.human_look_at_point = look_at_point
+
+            self.guiding_sm.userdata.route = None
+            self.guiding_sm.userdata.last_outcome = None
+            self.guiding_sm.userdata.landmarks_to_point = []
+
         global person_frame
         person_frame = goal.person_frame
         global human_perceived
@@ -641,14 +702,8 @@ class GuidingAction(object):
         SelectLandmark.target_pointed = False
         GetYesNo.repeat_question = 0
 
-        look_at_point = PointStamped()
-        look_at_point.header.frame_id = self.top_sm.userdata.person_frame
-        self.top_sm.userdata.human_look_at_point = look_at_point
-
-        self.guiding_sm.userdata.route = None
-        self.guiding_sm.userdata.last_outcome = None
-        self.guiding_sm.userdata.landmarks_to_point = []
-
+        rospy.logwarn("State machine starting with goal %s %s", self.top_sm.userdata.person_frame,
+                      self.guiding_sm.userdata.target_frame)
         outcome = self.top_sm.execute()
 
         # if self.human_lost:
@@ -991,9 +1046,6 @@ class PointingConfig(smach_ros.SimpleActionState):
             #     rospy.loginfo(self.get_name() + " preempted")
             #     self.service_preempt()
             #     return 'preempted'
-            rospy.logwarn("sleep")
-            rospy.sleep(5.0)
-            rospy.logwarn("end sleep")
             if len(userdata.landmarks_to_point) == 0:
                 return 'point_not_visible'
             else:

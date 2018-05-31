@@ -18,7 +18,7 @@ def show_client():
     client.wait_for_server()
     rospy.loginfo("send goal")
     # Creates a goal to send to the action server.
-    goal = taskGoal(place_frame='zizzi', person_frame="human-3")
+    goal = taskGoal(place_frame='door_A', person_frame="human-3")
 
     # Sends the goal to the action server.
     client.send_goal(goal)
@@ -33,6 +33,6 @@ def show_client():
 if __name__ == '__main__':
     # Initializes a rospy node so that the SimpleActionClient can
     # publish and subscribe over ROS.
-    rospy.init_node('show_action_client2')
+    rospy.init_node('show_action_client')
     result = show_client()
     print(result)
