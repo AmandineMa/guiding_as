@@ -31,7 +31,7 @@ from pointing_planner_msgs.msg import *
 from mummer_navigation_msgs.msg import *
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
-           'DispatchYesNoCL', 'Failure', 'GetRouteRegion', 'GetYesNo', 'GuidingAction', 'HumanLost', 'IsOver',
+           'DispatchYesNoCL', 'Failure', 'GetRouteRegion', 'GetAnswer', 'GuidingAction', 'HumanLost', 'IsOver',
            'LookAtHuman', 'LookAtHumanAssumedPlace', 'MoveToPose', 'PointAndLookAtHumanFuturePlace',
            'PointAndLookAtLandmark', 'PointingConfig', 'PointNotVisible', 'SaySeen', 'SelectLandmark',
            'ShouldHumanMove', 'StopTrackingCondition', 'Timer']
@@ -48,7 +48,7 @@ LOST_PERCEPTION_TIMEOUT = 0
 OBSERVE_LANDMARK_TIMEOUT = 0
 
 # supervisor constants
-PERSONNA = "lambda"
+PERSONA = "lambda"
 SPEECH_PRIORITY = 250
 
 # global variable
@@ -211,17 +211,37 @@ class GuidingAction(object):
                                                 'unknown': 'Failure', 'preempted': 'preempted', 'aborted': 'Failure'})
 
             smach.StateMachine.add('AskShowPlace', AskShowPlace(),
-                                   transitions={'succeeded': 'GetYesNo', 'preempted': 'preempted'})
+                                   transitions={'succeeded': 'GetAnswerShow', 'preempted': 'preempted'})
 
             smach.StateMachine.add('AskShowDirection', AskShowDirection(),
-                                   transitions={'succeeded': 'GetYesNo', 'preempted': 'preempted'})
+                                   transitions={'succeeded': 'GetAnswerShow', 'preempted': 'preempted'})
 
-            smach.StateMachine.add('GetYesNo', GetYesNo(),
+            smach.StateMachine.add('GetAnswerShow', GetAnswer(),
                                    transitions={'succeeded': 'DispatchYesNo', 'aborted': 'Failure',
-                                                'preempted': 'GetYesNo'})
+                                                'preempted': 'GetAnswerShow'})
 
             smach.StateMachine.add('DispatchYesNo', DispatchYesNo(),
-                                   transitions={'show': 'Show', 'no': 'task_succeeded', 'preempted': 'preempted'})
+                                   transitions={'ask_stairs_or_elevator': 'AskStairsOrElevator', 'show': 'Show',
+                                                'no': 'task_succeeded', 'preempted': 'preempted'})
+
+            smach.StateMachine.add('AskStairsOrElevator', AskStairsOrElevator(),
+                                   transitions={'get_answer': 'GetAnswerStairs', 'no_stairs': 'VerbalizeRoute',
+                                                'preempted': 'preempted'})
+
+            smach.StateMachine.add('GetAnswerStairs', GetAnswer(),
+                                   transitions={'succeeded': 'DispatchStairsElevator', 'aborted': 'Failure',
+                                                'preempted': 'GetAnswerStairs'})
+
+            smach.StateMachine.add('DispatchStairsElevator', DispatchStairsElevator(),
+                                   transitions={'stairs': 'VerbalizeRoute', 'elevator': 'GetRouteRegionBis',
+                                                'preempted': 'preempted'})
+
+            smach.StateMachine.add('GetRouteRegionBis', GetRouteRegion(),
+                                   transitions={'in_region': 'AskShowPlace', 'out_region': 'VerbalizeRoute',
+                                                'unknown': 'Failure', 'preempted': 'preempted', 'aborted': 'Failure'})
+
+            smach.StateMachine.add('VerbalizeRoute', VerbalizeRoute(),
+                                   transitions={'succeeded': 'Show', 'preempted': 'preempted'})
 
             self.show_sm = smach.StateMachine(outcomes=['show_succeeded', 'show_failed', 'preempted'],
                                               input_keys=['target_frame', 'person_frame', 'human_look_at_point',
@@ -362,14 +382,14 @@ class GuidingAction(object):
                                                                         'person_frame', 'last_outcome'])
 
                 with check_landmark_seen_sm:
-                    check_landmark_seen_sm.add('AskSeen', AskSeen(), transitions={'succeeded': 'GetYesNoCL',
+                    check_landmark_seen_sm.add('AskSeen', AskSeen(), transitions={'succeeded': 'GetAnswerCL',
                                                                                   'preempted': 'preempted'})
 
                     check_landmark_seen_sm.add('AskPointAgain', AskPointAgain(),
-                                               transitions={'succeeded': 'GetYesNoCL', 'preempted': 'preempted'})
+                                               transitions={'succeeded': 'GetAnswerCL', 'preempted': 'preempted'})
 
-                    check_landmark_seen_sm.add('GetYesNoCL', GetYesNo(),
-                                               transitions={'succeeded': 'DispatchYesNoCL', 'preempted': 'GetYesNoCL',
+                    check_landmark_seen_sm.add('GetAnswerCL', GetAnswer(),
+                                               transitions={'succeeded': 'DispatchYesNoCL', 'preempted': 'GetAnswerCL',
                                                             'aborted': 'failure'})
 
                     check_landmark_seen_sm.add('DispatchYesNoCL', DispatchYesNoCL(),
@@ -675,6 +695,7 @@ class GuidingAction(object):
         # userdata which needs to be initiate
         self.top_sm.userdata.person_frame = goal.person_frame
         self.guiding_sm.userdata.target_frame = goal.place_frame
+        self.guiding_sm.userdata.persona = "lambda"
         global person_frame
         person_frame = goal.person_frame
         global human_perceived
@@ -688,7 +709,7 @@ class GuidingAction(object):
         self.count = 0
         LookAtHumanAssumedPlace.does_not_see = 0
         SelectLandmark.target_pointed = False
-        GetYesNo.repeat_question = 0
+        GetAnswer.repeat_question = 0
 
         look_at_point = PointStamped()
         look_at_point.header.frame_id = self.top_sm.userdata.person_frame
@@ -762,8 +783,9 @@ class GetRouteRegion(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['in_region', 'out_region', 'unknown', 'preempted', 'aborted'],
-                             input_keys=['target_frame', 'human_look_at_point'],
-                             io_keys=['route'])
+                             input_keys=['target_frame', 'human_look_at_point', 'persona'],
+                             io_keys=['route'],
+                             output_keys=['stairs'])
 
     def _select_best_route(self, routes, costs):
         """Select the best route among the list of routes, according to the cost of each one"""
@@ -810,13 +832,11 @@ class GetRouteRegion(smach.State):
             get_route_region = GuidingAction.services_proxy["get_route_region"](
                 ROBOT_PLACE,
                 userdata.target_frame,
-                PERSONNA,
+                userdata.persona,
                 False)
 
         except rospy.ServiceException, e:
             return 'aborted'
-
-        # test.execute(smach.Remapper(userdata, self.get_registered_input_keys(), self.get_registered_output_keys()))
 
         # if the routes list returned by the route planner is not empty
         if len(get_route_region.routes) != 0:
@@ -824,9 +844,10 @@ class GetRouteRegion(smach.State):
         else:
             userdata.route = []
 
-        # test = Test()
-        # if test.execute(userdata) == 'aborted':
-        #     rospy.logerr("hey")
+        if any("stairs" in x for x in userdata.route):
+            userdata.stairs = True
+        else:
+            userdata.stairs = False
 
         # if the routes list returned by the route planner is empty, the target is unknown
         if len(userdata.route) == 0:
@@ -838,6 +859,93 @@ class GetRouteRegion(smach.State):
             return 'in_region'
         else:
             return 'out_region'
+
+
+class AskShowDirection(smach.State):
+    def __init__(self):
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted'],
+                             input_keys=['human_look_at_point'],
+                             output_keys=['question_asked'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+
+        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                            "It's not here",
+                                            SPEECH_PRIORITY)
+        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                            "Would you like me to indicate you the way ?",
+                                            SPEECH_PRIORITY)
+
+        userdata.question_asked = 'ask_show_direction'
+        return 'succeeded'
+
+
+class AskStairsOrElevator(smach.State):
+    def __init__(self):
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['get_answer', 'no_stairs', 'preempted'],
+                             input_keys=['stairs', 'human_look_at_point'],
+                             output_keys=['question_asked'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+
+        if userdata.stairs:
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                "It's on the first floor.",
+                                                SPEECH_PRIORITY)
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                "Would you like to take the stairs or the elevator ?",
+                                                SPEECH_PRIORITY)
+
+            userdata.question_asked = 'ask_stairs_or_elevator'
+            return 'get_answer'
+        else:
+            return 'no_stairs'
+
+
+class VerbalizeRoute(smach.State):
+    def __init__(self):
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted'],
+                             input_keys=['route', 'human_look_at_point', 'target_frame'],
+                             output_keys=['question_asked'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+
+        # call the route description service
+        route_description = GuidingAction.services_proxy["get_route_description"](userdata.route, ROBOT_PLACE,
+                                                                                  userdata.target_frame).region_route
+
+        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                            "You need to " + route_description,
+                                            SPEECH_PRIORITY)
+
+        return 'succeeded'
 
 
 class AskShowPlace(smach.State):
@@ -884,20 +992,20 @@ class AskShowPlace(smach.State):
         if target_name.code == 0:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                 target_name.value +
-                                                "is nearby. Would you like me to show you the place ?",
+                                                " is nearby. Would you like me to show you the place ?",
                                                 SPEECH_PRIORITY)
         # If there is not, the 'technical' name is used
         else:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                 userdata.target_frame +
-                                                "is nearby. Would you like me to show you the place ?",
+                                                " is nearby. Would you like me to show you the place ?",
                                                 SPEECH_PRIORITY)
 
         userdata.question_asked = 'ask_show_target'
         return 'succeeded'
 
 
-class AskShowDirection(smach.State):
+class AskShowDirection1(smach.State):
     """Case where the robot is not in the same region than the place
 
     First, it calls a service to get the verbalized description of the route.
@@ -1044,7 +1152,6 @@ class PointingConfig(smach_ros.SimpleActionState):
             PointingConfig.direction_landmark = userdata.route[1]
 
         # Check if it exists an associated mesh to the target
-        rospy.logerr("target frame %s", userdata.target_frame)
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.target_frame)
         if not has_mesh_result.success:
             rospy.logerr("has_mesh service failed")
@@ -1063,7 +1170,6 @@ class PointingConfig(smach_ros.SimpleActionState):
         pointing_planner_goal.human = userdata.person_frame
         pointing_planner_goal.target_landmark = target_frame
         pointing_planner_goal.direction_landmark = PointingConfig.direction_landmark
-        rospy.logwarn("pointing goal : %s", pointing_planner_goal)
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
@@ -2398,7 +2504,7 @@ class AskPointAgain(smach.State):
             return 'succeeded'
 
 
-class GetYesNo(smach_ros.SimpleActionState):
+class GetAnswer(smach_ros.SimpleActionState):
     """It calls the dialogue action server to get the answer at question asked. The expected words from the
     human are 'yes' or 'no'.
 
@@ -2423,7 +2529,7 @@ class GetYesNo(smach_ros.SimpleActionState):
     repeat_question = 0
 
     def __init__(self):
-        """Constructor for GetYesNo state
+        """Constructor for GetAnswer state
 
         It calls the super constructor of L{smach.State} and defines the outcomes, the input_keys, the output_keys,
         the 3 action state callbacks, each one for the goal, the feedback and the result, a execution timeout (no answer
@@ -2450,18 +2556,18 @@ class GetYesNo(smach_ros.SimpleActionState):
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
         dialogue_goal = dialogue_actionGoal()
         # the action server has to catch the words 'yes' and 'no'
-        dialogue_goal.subjects = ['yes', 'no']
+        dialogue_goal.subjects = ['yes', 'no', 'stairs', 'elevator']
         dialogue_goal.enable_only_subject = True
         return dialogue_goal
 
     def dialogue_feedback_cb(self, userdata, feedback):
         # the human said something else than yes or no, an unexpected word
         self._activate_time = rospy.Time.now()
-        GuidingAction.feedback.current_step = "Human said something else than yes or no"
+        GuidingAction.feedback.current_step = "Human said something else than expected words"
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
         try:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "I'm sorry I did not understand, you should say yes or no",
+                                                "I'm sorry I did not understand what you said",
                                                 SPEECH_PRIORITY)
         except rospy.ServiceException, e:
             rospy.logerr("speech exception")
@@ -2476,7 +2582,7 @@ class GetYesNo(smach_ros.SimpleActionState):
         action_success = 'aborted'
         # the human said yes or no
         if status == actionlib.GoalStatus.SUCCEEDED:
-            GuidingAction.feedback.current_step = "Human said yes or no"
+            GuidingAction.feedback.current_step = "Human said answered well"
             GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
             userdata.result_word = result.subject
             action_success = 'succeeded'
@@ -2557,7 +2663,7 @@ class DispatchYesNo(smach.State):
 
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
-        smach.State.__init__(self, outcomes=['show', 'no', 'preempted'],
+        smach.State.__init__(self, outcomes=['show', 'ask_stairs_or_elevator', 'no', 'preempted'],
                              input_keys=['question_asked', 'result_word', 'human_look_at_point'])
 
     def get_name(self):
@@ -2582,7 +2688,7 @@ class DispatchYesNo(smach.State):
                 next_action = 'no'
         elif userdata.question_asked == 'ask_show_direction':
             if userdata.result_word == 'yes':
-                next_action = 'show'
+                next_action = 'ask_stairs_or_elevator'
             else:
                 try:
                     GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Ok, I hope you will get there!",
@@ -2591,6 +2697,48 @@ class DispatchYesNo(smach.State):
                     rospy.logerr("speech exception")
                 next_action = 'no'
 
+        return next_action
+
+
+class DispatchStairsElevator(smach.State):
+    """According to the question which has been asked and the human answer which has been received,
+    it returns the corresponding outcome.
+
+    There are 3 possible outcomes:
+
+    - show: the human want the robot to show him the place or the way to follow (for now it it the same case if the
+      target is in the same area or in a different one)
+    - no: the human does want the robot's help
+    - preempted: the state has been preempted
+    """
+
+    def __init__(self):
+        """Constructor for DispatchYesNo state
+
+        It calls the super constructor of L{smach.State} and defines the outcomes and the input_keys.
+
+        """
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['stairs', 'elevator', 'preempted'],
+                             input_keys=['question_asked', 'result_word', 'human_look_at_point'],
+                             output_keys=['persona'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+        """Dispatch the question-answer couples"""
+        next_action = 'preempted'
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            next_action = 'preempted'
+        elif userdata.question_asked == 'ask_stairs_or_elevator':
+            if userdata.result_word == 'elevator':
+                userdata.persona = "old"
+                next_action = 'elevator'
+            else:
+                next_action = 'stairs'
         return next_action
 
 
