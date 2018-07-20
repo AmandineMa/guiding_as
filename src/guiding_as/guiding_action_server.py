@@ -105,25 +105,6 @@ class GuidingAction(object):
         GuidingAction.rot_publisher = rospy.Publisher(rospy.get_param('/topics/debug_rot'), PoseStamped,
                                                       queue_size=10)
 
-        global ROBOT_PLACE
-        ROBOT_PLACE = rospy.get_param('/perspective/robot_place')
-        global WORLD
-        WORLD = rospy.get_param('/perspective/world')
-        global POINTING_DURATION
-        POINTING_DURATION = rospy.get_param('/tuning_param/pointing_duration')
-        global STOP_TRACK_DIST_TH
-        STOP_TRACK_DIST_TH = rospy.get_param('/tuning_param/stop_tracking_dist_th')
-        global HUMAN_SHOULD_MOVE_DIST_TH
-        HUMAN_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/human_should_move_dist_th')
-        global ROBOT_SHOULD_MOVE_DIST_TH
-        ROBOT_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/robot_should_move_dist_th')
-        global TAKE_ROBOT_PLACE_DIST_TH
-        TAKE_ROBOT_PLACE_DIST_TH = rospy.get_param('/tuning_param/take_robot_place_dist_th')
-        global LOST_PERCEPTION_TIMEOUT
-        LOST_PERCEPTION_TIMEOUT = rospy.get_param('/tuning_param/lost_perception_timeout')
-        global OBSERVE_LANDMARK_TIMEOUT
-        OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/tuning_param/observe_landmark_timeout')
-
         rospy.loginfo("waiting for service " + stand_pose_srv)
         rospy.wait_for_service(stand_pose_srv)
 
@@ -526,9 +507,10 @@ class GuidingAction(object):
 
                 # rospy.logwarn("lost since "+str(self.duration_lost))
 
-                # [TO_TUNE] to stop the state machine if human not perceived after X time
-                # if rospy.Duration(self.duration_lost) > rospy.Duration(LOST_PERCEPTION_TIMEOUT):
-                #     return False
+                if rospy.get_param('/tuning_param/stop_when_human_lost'):
+                    # to stop the state machine if human not perceived after X time
+                    if rospy.Duration(self.duration_lost) > rospy.Duration(LOST_PERCEPTION_TIMEOUT):
+                        return False
 
             # pas joli de faire ca ici
             # try:
@@ -691,6 +673,26 @@ class GuidingAction(object):
         - last_outcome: Outcome returned by the last state the machine was in
         - last_state: Last active state the machine was in
         """
+
+        global ROBOT_PLACE
+        ROBOT_PLACE = rospy.get_param('/perspective/robot_place')
+        global WORLD
+        WORLD = rospy.get_param('/perspective/world')
+        global POINTING_DURATION
+        POINTING_DURATION = rospy.get_param('/tuning_param/pointing_duration')
+        global STOP_TRACK_DIST_TH
+        STOP_TRACK_DIST_TH = rospy.get_param('/tuning_param/stop_tracking_dist_th')
+        global HUMAN_SHOULD_MOVE_DIST_TH
+        HUMAN_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/human_should_move_dist_th')
+        global ROBOT_SHOULD_MOVE_DIST_TH
+        ROBOT_SHOULD_MOVE_DIST_TH = rospy.get_param('/tuning_param/robot_should_move_dist_th')
+        global TAKE_ROBOT_PLACE_DIST_TH
+        TAKE_ROBOT_PLACE_DIST_TH = rospy.get_param('/tuning_param/take_robot_place_dist_th')
+        global LOST_PERCEPTION_TIMEOUT
+        LOST_PERCEPTION_TIMEOUT = rospy.get_param('/tuning_param/lost_perception_timeout')
+        global OBSERVE_LANDMARK_TIMEOUT
+        OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/tuning_param/observe_landmark_timeout')
+
         self.top_sm.set_initial_state(['GUIDING_MONITORING'])
         # userdata which needs to be initiate
         self.top_sm.userdata.person_frame = goal.person_frame
@@ -2927,7 +2929,7 @@ class HumanLost(smach.State):
     def execute(self, userdata):
         try:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "I am sorry, I am not able to see you anymore. Bye bye.",
+                                                "Oh no, you left ! Too bad.",
                                                 SPEECH_PRIORITY)
         except rospy.ServiceException, e:
             rospy.logerr("speech exception")

@@ -44,6 +44,7 @@ tuning_param:
   take_robot_place_dist_th: 0.6 #meters
   lost_perception_timeout: 10 #seconds
   observe_landmark_timeout: 3 #seconds
+  stop_when_human_lost: False
 
 perspective:
   world: base
