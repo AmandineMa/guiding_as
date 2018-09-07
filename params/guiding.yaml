@@ -2,6 +2,9 @@ pointing_config:
   distance_to_robot : 1
   alpha : 110
 
+dialogue:
+  hwu: True
+
 services:
   stand_pose: /naoqi_driver/robot_posture/go_to_posture
   say: /speech_wrapper/speak_to

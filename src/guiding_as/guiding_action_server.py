@@ -507,26 +507,28 @@ class GuidingAction(object):
                 else:
                     self.duration_lost = (rospy.Time.now() - self.time_lost).to_sec()
 
-                # rospy.logwarn("lost since "+str(self.duration_lost))
-
-                # pas joli de faire ca ici
-                # try:
-                #     alt_id = GuidingAction.services_proxy["find_alternate_id"](userdata.person_frame)
-                #     if alt_id.success:
-                #         monitor_humans_request = MonitorHumansRequest()
-                #         monitor_humans_request.action = "REMOVE"
-                #         try:
-                #             GuidingAction.services_proxy["monitor_humans"](monitor_humans_request)
-                #             global person_frame
-                #             person_frame = alt_id.result_id
-                #             monitor_humans_request.action = "ADD"
-                #             monitor_humans_request.humans_to_monitor = [alt_id.result_id]
-                #             GuidingAction.services_proxy["monitor_humans"](monitor_humans_request)
-                #         except rospy.ServiceException, e:
-                #             rospy.logerr("monitor human exception")
-                #         rospy.logwarn(alt_id.result_id)
-                # except rospy.ServiceException, e:
-                #     rospy.logerr("find alternate id exception")
+                if rospy.get_param('/tuning_param/stop_when_human_lost'):
+                    # to stop the state machine if human not perceived after X time
+                    if rospy.Duration(self.duration_lost) > rospy.Duration(LOST_PERCEPTION_TIMEOUT):
+                        return False
+            # pas joli de faire ca ici
+            # try:
+            #     alt_id = GuidingAction.services_proxy["find_alternate_id"](userdata.person_frame)
+            #     if alt_id.success:
+            #         monitor_humans_request = MonitorHumansRequest()
+            #         monitor_humans_request.action = "REMOVE"
+            #         try:
+            #             GuidingAction.services_proxy["monitor_humans"](monitor_humans_request)
+            #             global person_frame
+            #             person_frame = alt_id.result_id
+            #             monitor_humans_request.action = "ADD"
+            #             monitor_humans_request.humans_to_monitor = [alt_id.result_id]
+            #             GuidingAction.services_proxy["monitor_humans"](monitor_humans_request)
+            #         except rospy.ServiceException, e:
+            #             rospy.logerr("monitor human exception")
+            #         rospy.logwarn(alt_id.result_id)
+            # except rospy.ServiceException, e:
+            #     rospy.logerr("find alternate id exception")
 
             userdata.duration_lost = self.duration_lost
             userdata.human_lost = self.human_lost
