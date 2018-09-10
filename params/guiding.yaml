@@ -3,13 +3,13 @@ pointing_config:
   alpha : 110
 
 dialogue:
-  hwu: True
+  hwu: False
 
 services:
   stand_pose: /naoqi_driver/robot_posture/go_to_posture
   say: /speech_wrapper/speak_to
   get_route_region: /semantic_route_description/get_route_region
-  get_route_description: /route_description/verbalizeRegion
+  get_route_description: /route_verbalization/verbalizeRegion
   get_individual_info: /ontoloGenius/individual
   get_pointing_config: /pointing_planner/plan
   is_visible: /pointing_planner/visibility_score

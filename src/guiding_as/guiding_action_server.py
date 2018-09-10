@@ -21,7 +21,7 @@ from deictic_gestures_msgs.srv import *
 from semantic_route_description_msgs.srv import *
 from perspectives_msgs.srv import *
 from ontologenius_msgs.srv import *
-from route_description_msgs.srv import *
+from route_verbalization_msgs.srv import *
 from multimodal_human_monitor_msgs.srv import *
 from head_manager_msgs.msg import *
 from pointing_planner_msgs.msg import *
@@ -30,7 +30,7 @@ from dialogue_as.msg import *
 from pointing_planner_msgs.srv import *
 from speech_wrapper_msgs.srv import *
 from mummer_navigation_msgs.msg import *
-from dialogue_arbiter_action.da_simple_plugin_server import DASimplePluginServer
+# from dialogue_arbiter_action.da_simple_plugin_server import DASimplePluginServer
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace',
            'Failure', 'GetRouteRegion', 'GuidingAction', 'HumanLost', 'IsOver',
@@ -75,16 +75,16 @@ class GuidingAction(object):
     def __init__(self, name):
         self._action_name = name
 
-        # GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
-        #                                                            execute_cb=self.execute_cb,
-        #                                                            auto_start=False)
+        GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
+                                                                   execute_cb=self.execute_cb,
+                                                                   auto_start=False)
 
-        GuidingAction.action_server = DASimplePluginServer(
-            "/task_route_descr",
-            taskAction,
-            execute_cb=self.execute_cb,
-            auto_start=False
-        )
+        # GuidingAction.action_server = DASimplePluginServer(
+        #     "/task_route_descr",
+        #     taskAction,
+        #     execute_cb=self.execute_cb,
+        #     auto_start=False
+        # )
         self.run = True
         GuidingAction.action_server.register_preempt_callback(self.preempt_cb)
 
@@ -284,6 +284,17 @@ class GuidingAction(object):
                 #                        transitions={'succeeded': 'AreLandmarksVisibleFromHuman', 'continue_to_look': 'HumanTracking',
                 #                                     'look_final_dest': 'LookAtHumanAssumedPlaceX',
                 #                                     'preempted': 'show_failed', 'aborted': 'show_failed'})
+
+                smach.StateMachine.add('LookAtHumanAssumedPlaceX', LookAtHumanAssumedPlace(),
+                                       transitions={'succeeded': 'AreLandmarksVisibleFromHuman',
+                                                    'preempted': 'preempted',
+                                                    'aborted': 'show_failed', 'look_again': 'LookAtHumanAssumedPlaceX'})
+
+                # smach.StateMachine.add('ShouldHumanMove2', ShouldHumanMove(),
+                #                        transitions={'human_first': 'AreLandmarksVisibleFromHuman',
+                #                                     'no': 'ShouldRobotMove1',
+                #                                     'robot_first': 'show_failed', 'aborted': 'show_failed',
+                #                                     'preempted': 'preempted'})
 
                 smach.StateMachine.add('AreLandmarksVisibleFromHuman', AreLandmarksVisibleFromHuman(),
                                        transitions={'landmarks_visible': 'PointingConfigForRobot',
