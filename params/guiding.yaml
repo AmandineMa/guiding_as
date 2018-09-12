@@ -10,7 +10,7 @@ services:
   say: /speech_wrapper/speak_to
   get_route_region: /semantic_route_description/get_route_region
   get_route_description: /route_verbalization/verbalizeRegion
-  get_individual_info: /ontoloGenius/individual
+  get_individual_info: /ontologenius/individual
   get_pointing_config: /pointing_planner/plan
   is_visible: /pointing_planner/visibility_score
   can_look_at: /deictic_gestures/can_look_at
