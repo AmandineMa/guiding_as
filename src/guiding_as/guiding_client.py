@@ -18,7 +18,7 @@ def show_client():
     client.wait_for_server()
     rospy.loginfo("send goal")
     # Creates a goal to send to the action server.
-    goal = taskGoal(place_frame='door_A', person_frame="human-3")
+    goal = taskGoal(place_frame='burger_king', person_frame="human-3")
 
     # Sends the goal to the action server.
     client.send_goal(goal)

@@ -4,6 +4,6 @@
 
 <node name="baselink2target2_tf_publisher" pkg="tf" type="static_transform_publisher" args="1.5 6.3 1 0 0 0 map target2 20" />
 
- <node name="map2human_tf_publisher" pkg="tf" type="static_transform_publisher" args="-2 0 0 0 0 0 map mocap_human-1 20" />
+ <node name="map2human_tf_publisher" pkg="tf" type="static_transform_publisher" args="-2 0 0 0 0 0 map human-1 20" />
 
 </launch>
