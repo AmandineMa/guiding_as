@@ -9,6 +9,7 @@ services:
   stand_pose: /naoqi_driver/robot_posture/go_to_posture
   say: /speech_wrapper/speak_to
   get_route_region: /semantic_route_description/get_route_region
+  get_route: /semantic_route_description/get_route
   get_route_description: /route_verbalization/verbalizeRegion
   get_individual_info: /ontologenius/individual
   get_pointing_config: /pointing_planner/plan
