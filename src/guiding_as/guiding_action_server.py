@@ -11,6 +11,8 @@ import smach
 import smach_ros
 import copy
 from collections import namedtuple
+import json
+import tf.transformations as transform
 from nao_interaction_msgs.srv import *
 from move_base_msgs.msg import *
 from geometry_msgs.msg import *
@@ -32,7 +34,7 @@ from speech_wrapper_msgs.srv import *
 from mummer_navigation_msgs.msg import *
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
-           'DispatchYesNoCL', 'Failure', 'GetRouteRegion', 'GetYesNo', 'GuidingAction', 'HumanLost', 'IsOver',
+           'DispatchYesNoCL', 'Failure', 'GetRouteRegion', 'GuidingAction', 'HumanLost', 'IsOver',
            'LookAtHuman', 'LookAtHumanAssumedPlace', 'MoveToPose', 'PointAndLookAtHumanFuturePlace',
            'PointAndLookAtLandmark', 'PointingConfig', 'PointNotVisible', 'SaySeen', 'SelectLandmark',
            'ShouldHumanMove', 'StopTrackingCondition', 'Timer']
@@ -738,7 +740,8 @@ class GuidingAction(object):
         - last_outcome: Outcome returned by the last state the machine was in
         - last_state: Last active state the machine was in
         """
-	global ROBOT_PLACE
+
+        global ROBOT_PLACE
         ROBOT_PLACE = rospy.get_param('/perspective/robot_place')
         global WORLD
         WORLD = rospy.get_param('/perspective/world')
@@ -794,7 +797,7 @@ class GuidingAction(object):
             # userdata which needs to be initialized
             self.top_sm.userdata.person_frame = goal.person_frame
             self.guiding_sm.userdata.target_frame = goal.place_frame
-	    self.guiding_sm.userdata.persona = "lambda"
+            self.guiding_sm.userdata.persona = "lambda"
             look_at_point = PointStamped()
             look_at_point.header.frame_id = self.top_sm.userdata.person_frame
             self.top_sm.userdata.human_look_at_point = look_at_point
@@ -835,7 +838,7 @@ class GuidingAction(object):
         rospy.logwarn("State machine starting with goal %s %s", self.top_sm.userdata.person_frame,
                       self.guiding_sm.userdata.target_frame)
 
-	outcome = self.top_sm.execute()
+        outcome = self.top_sm.execute()
 
         # if self.human_lost:
         #     try:
