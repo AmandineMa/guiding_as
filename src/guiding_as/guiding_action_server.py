@@ -806,6 +806,11 @@ class GuidingAction(object):
             self.guiding_sm.userdata.last_outcome = None
             self.guiding_sm.userdata.landmarks_to_point = []
 
+            self.show_sm.userdata.second_pointing_config = False
+
+            PointingConfig.has_been_in_state = False
+            PointingConfig.direction_landmark = ""
+
         global person_frame
         person_frame = goal.person_frame
         global human_perceived
@@ -825,15 +830,6 @@ class GuidingAction(object):
         look_at_point = PointStamped()
         look_at_point.header.frame_id = self.top_sm.userdata.person_frame
         self.top_sm.userdata.human_look_at_point = look_at_point
-
-        self.guiding_sm.userdata.route = None
-        self.guiding_sm.userdata.last_outcome = None
-        self.guiding_sm.userdata.landmarks_to_point = []
-
-        self.show_sm.userdata.second_pointing_config = False
-
-        PointingConfig.has_been_in_state = False
-        PointingConfig.direction_landmark = ""
 
         rospy.logwarn("State machine starting with goal %s %s", self.top_sm.userdata.person_frame,
                       self.guiding_sm.userdata.target_frame)
