@@ -8,9 +8,9 @@ dialogue:
 services:
   stand_pose: /naoqi_driver/robot_posture/go_to_posture
   say: /speech_wrapper/speak_to
-  get_route_region: /semantic_route_description/get_route_region
+  get_route_region: /semantic_route_description/get_route
   get_route: /semantic_route_description/get_route
-  get_route_description: /route_verbalization/verbalizeRegion
+  get_route_description: /route_verbalization/verbalizePlace
   get_individual_info: /ontologenius/individual
   get_pointing_config: /pointing_planner/plan
   is_visible: /pointing_planner/visibility_score
@@ -49,7 +49,8 @@ tuning_param:
   lost_perception_timeout: 10 #seconds
   observe_landmark_timeout: 3 #seconds
   stop_when_human_lost: False
+  signpost: False
 
 perspective:
   world: base
-  robot_place: robot_infodesk
+  robot_place: pepper_infodesk
