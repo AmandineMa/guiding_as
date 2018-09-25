@@ -1278,7 +1278,7 @@ class PointingConfig(smach_ros.SimpleActionState):
 
         goal_frame = ""
         # if there is a direction landmark in the route list returned by the route planner
-        if len(userdata.route) > DIRECTION_INDEX-1:
+        if len(userdata.route) > DIRECTION_INDEX:
             PointingConfig.direction_landmark = userdata.route[DIRECTION_INDEX]
 
         # Check if it exists an associated mesh to the goal
@@ -2386,8 +2386,8 @@ class SelectLandmark(smach.State):
                 return 'point_not_visible'
         # second pass in the state, the direction has to be pointed
         else:
+            userdata.landmark_to_point = (direction, LANDMARK_TYPE_DIRECTION)
             if direction in userdata.landmarks_to_point:
-                userdata.landmark_to_point = (direction, LANDMARK_TYPE_DIRECTION)
                 return 'point_direction'
             else:
                 return 'point_not_visible'
@@ -2488,7 +2488,7 @@ class PointNotVisible(smach.State):
 
             route = userdata.route
             if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-                route = route[0:DIRECTION_INDEX]
+                route = route[0:DIRECTION_INDEX+1]
 
             route_description = GuidingAction.services_proxy["get_route_description"](
                 route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
@@ -3214,7 +3214,7 @@ class IsOver(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'point_direction', 'preempted', 'aborted'],
-                             input_keys=['landmark_to_point', 'landmarks_to_point', 'last_outcome'])
+                             input_keys=['landmark_to_point', 'landmarks_to_point', 'last_outcome', 'route'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -3230,11 +3230,13 @@ class IsOver(smach.State):
         # pointed yet
         # or if the only landmark contained in the list returned by the pointing planner is a direction
 
-        if (len(userdata.landmarks_to_point) == 2 and
-            userdata.landmark_to_point[LANDMARK_NAME] != userdata.landmarks_to_point[LANDMARK_TYPE_DIRECTION]) \
-                or \
-                (userdata.landmark_to_point[LANDMARK_NAME] not in userdata.landmarks_to_point
-                 and len(userdata.landmarks_to_point) == 1):
+        # if (len(userdata.landmarks_to_point) == 2 and
+        #     userdata.landmark_to_point[LANDMARK_NAME] != userdata.landmarks_to_point[LANDMARK_TYPE_DIRECTION]) \
+        #         or \
+        #         (userdata.landmark_to_point[LANDMARK_NAME] not in userdata.landmarks_to_point
+        #          and len(userdata.landmarks_to_point) == 1):
+
+        if len(userdata.route) > DIRECTION_INDEX and userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
             return 'point_direction'
         # if the human does want to see the landmark again
         elif userdata.last_outcome == 'no':
