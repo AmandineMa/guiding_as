@@ -1,56 +1,57 @@
-pointing_config:
-  distance_to_robot : 1
-  alpha : 110
+guiding:
+  pointing_config:
+    distance_to_robot : 1
+    alpha : 110
 
-dialogue:
-  hwu: False
+  dialogue:
+    hwu: False
 
-services:
-  stand_pose: /naoqi_driver/robot_posture/go_to_posture
-  say: /speech_wrapper/speak_to
-  get_route_region: /semantic_route_description/get_route
-  get_route: /semantic_route_description/get_route
-  get_route_description: /route_verbalization/verbalizePlace
-  get_individual_info: /ontologenius/individual
-  get_pointing_config: /pointing_planner/plan
-  is_visible: /pointing_planner/visibility_score
-  can_look_at: /deictic_gestures/can_look_at
-  look_at: /deictic_gestures/look_at
-  can_point_at: /deictic_gestures/can_point_at
-  point_at: /deictic_gestures/point_at
-  rest_arm: /deictic_gestures/rest_arm
-  has_mesh: /uwds_ros_bridge/has_mesh
-  monitor_humans: /multimodal_human_monitor/monitor_humans
-  start_fact: /uwds_ros_bridge/start_fact
-  end_fact: /uwds_ros_bridge/end_fact
-  find_alternate_id: /multimodal_human_monitor/find_alternate_id
+  services:
+    stand_pose: /naoqi_driver/robot_posture/go_to_posture
+    say: /speech_wrapper/speak_to
+    get_route_region: /semantic_route_description/get_route_region
+    get_route: /semantic_route_description/get_route
+    get_route_description: /route_verbalization/verbalizePlace
+    get_individual_info: /ontologenius/individual
+    get_pointing_config: /pointing_planner/plan
+    is_visible: /pointing_planner/visibility_score
+    can_look_at: /deictic_gestures/can_look_at
+    look_at: /deictic_gestures/look_at
+    can_point_at: /deictic_gestures/can_point_at
+    point_at: /deictic_gestures/point_at
+    rest_arm: /deictic_gestures/rest_arm
+    has_mesh: /uwds_ros_bridge/has_mesh
+    monitor_humans: /multimodal_human_monitor/monitor_humans
+    start_fact: /uwds_ros_bridge/start_fact
+    end_fact: /uwds_ros_bridge/end_fact
+    find_alternate_id: /multimodal_human_monitor/find_alternate_id
 
-  activate_dialogue: /activate
-  deactivate_dialogue: /deactivate
+    activate_dialogue: /activate
+    deactivate_dialogue: /deactivate
 
-topics:
-  current_facts: /base/current_facts
-  coord_signals: /head_manager/head_coordination_signals
-  debug_pp: /supervision/pointing_planner
-  debug_rot: /supervision/rotation
+  topics:
+    current_facts: /base/current_facts
+    coord_signals: /head_manager/head_coordination_signals
+    debug_pp: /supervision/pointing_planner
+    debug_rot: /supervision/rotation
 
-action_servers:
-  move_to: m_move_to
-  rotate: m_rotate
-  dialogue: dialogue_as
-  pointing_planner: pointing_planner/PointingPlanner
+  action_servers:
+    move_to: m_move_to
+    rotate: m_rotate
+    dialogue: dialogue_as
+    pointing_planner: pointing_planner/PointingPlanner
 
-tuning_param:
-  pointing_duration: 2.5 #seconds
-  stop_tracking_dist_th: 0.3 #meters
-  human_should_move_dist_th: 0.5 #meters
-  robot_should_move_dist_th: 0.5 #meters
-  take_robot_place_dist_th: 0.6 #meters
-  lost_perception_timeout: 10 #seconds
-  observe_landmark_timeout: 3 #seconds
-  stop_when_human_lost: False
-  signpost: False
+  tuning_param:
+    pointing_duration: 2.5 #seconds
+    stop_tracking_dist_th: 0.3 #meters
+    human_should_move_dist_th: 0.5 #meters
+    robot_should_move_dist_th: 0.5 #meters
+    take_robot_place_dist_th: 0.6 #meters
+    lost_perception_timeout: 10 #seconds
+    observe_landmark_timeout: 3 #seconds
+    stop_when_human_lost: False
+    signpost: False
 
-perspective:
-  world: base
-  robot_place: pepper_infodesk
+  perspective:
+    world: base
+    robot_place: robot_infodesk
