@@ -1447,7 +1447,7 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
         GuidingAction.feedback.current_step = "get_pointing_config"
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
 
-        ggoal_frame = ""
+        goal_frame = ""
 
         PointingConfig.direction_landmark = userdata.direction
 
