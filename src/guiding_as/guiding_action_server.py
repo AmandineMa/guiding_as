@@ -1540,11 +1540,11 @@ class ShouldHumanMove(smach.State):
                     # rospy.logwarn("dist robot now human future : %f", distance_r_now_h_future)
                     # if the distance is inferior to the threshold, the human should take the actual robot place,
                     # therefore the robot should move first
-                    # if distance_r_now_h_future < TAKE_ROBOT_PLACE_DIST_TH:
-                    return 'robot_first'
-                    # # the human wanted pose is at a certain distance of the robot, the human can move first
-                    # else:
-                    #     return 'human_first'
+                    if distance_r_now_h_future < TAKE_ROBOT_PLACE_DIST_TH:
+                        return 'robot_first'
+                    # the human wanted pose is at a certain distance of the robot, the human can move first
+                    else:
+                        return 'human_first'
 
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
                     rospy.logerr('tf exception')
