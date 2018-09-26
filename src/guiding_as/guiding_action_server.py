@@ -256,8 +256,9 @@ class GuidingAction(object):
 
             self.show_sm = smach.StateMachine(outcomes=['show_succeeded', 'show_failed', 'preempted'],
                                               input_keys=['target_frame', 'person_frame', 'human_look_at_point',
-                                                          'route', 'goal_frame', 'persona',
-                                                          'last_state', 'last_outcome', 'landmarks_to_point'],
+                                                          'route', 'goal_frame', 'persona', 'direction',
+                                                          'last_state', 'last_outcome', 'landmarks_to_point',
+                                                          'route_2_shop_w_sign'],
                                               output_keys=['last_state', 'last_outcome', 'person_frame'])
 
             with self.show_sm:
@@ -687,7 +688,7 @@ class GuidingAction(object):
         for fact in msg.facts:
             if fact.predicate == "isVisibleBy" \
                     and fact.object_name == ud.person_frame \
-                    and fact.subject_name == ud.target_frame:
+                    and fact.subject_name == ud.goal_frame:
                 rospy.logwarn("visible")
                 return False
             else:
@@ -820,6 +821,8 @@ class GuidingAction(object):
             self.top_sm.userdata.human_look_at_point = look_at_point
 
             self.guiding_sm.userdata.route = None
+            self.guiding_sm.userdata.goal_frame = ""
+            self.guiding_sm.userdata.direction = ""
             self.guiding_sm.userdata.last_outcome = None
             self.guiding_sm.userdata.landmarks_to_point = []
 
@@ -839,7 +842,7 @@ class GuidingAction(object):
         self.duration_lost = 0
         self.fact_id = ""
         self.count = 0
-        LookAtHumanAssumedPlace.does_not_see = 0
+        LookAtAssumedPlace.does_not_see = 0
         CheckPerceived.does_not_see = 0
         SelectLandmark.target_pointed = False
         GetAnswer.repeat_question = 0
@@ -914,6 +917,7 @@ def select_best_route(routes, costs, goals):
 
 
 NO_INTERFACE_LEN = 3
+DIRECTION_INDEX = 2
 
 
 class GetRouteRegion(smach.State):
@@ -938,9 +942,9 @@ class GetRouteRegion(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['in_region', 'out_region', 'unknown', 'preempted', 'aborted'],
-                             input_keys=['target_frame', 'human_look_at_point', 'persona'],
+                             input_keys=['target_frame', 'human_look_at_point', 'persona', 'route_2_shop_w_sign'],
                              io_keys=['route'],
-                             output_keys=['stairs', 'goal_frame', 'target_out_region'])
+                             output_keys=['stairs', 'goal_frame', 'target_out_region', 'direction', 'route_2_shop_w_sign'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -1009,12 +1013,14 @@ class GetRouteRegion(smach.State):
                 False,
                 None)
             select_best_route_result = select_best_route(get_route.routes, get_route.costs, get_route.goals)
-            route = select_best_route_result['route'].route
+            userdata.route_2_shop_w_sign = select_best_route_result['route'].route
 
-            if len(route) == NO_INTERFACE_LEN:
+            if len(userdata.route_2_shop_w_sign) == NO_INTERFACE_LEN:
                 userdata.target_out_region = False
+                userdata.direction = ""
                 return 'in_region'
             else:
+                userdata.direction = userdata.route_2_shop_w_sign[DIRECTION_INDEX]
                 return 'out_region'
 
 
@@ -1041,7 +1047,7 @@ class AskShowPlace(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['get_answer', 'show', 'not_show', 'preempted'],
-                             input_keys=['target_frame', 'human_look_at_point', 'target_out_region'],
+                             input_keys=['goal_frame', 'human_look_at_point', 'target_out_region'],
                              output_keys=['question_asked'])
 
     def get_name(self):
@@ -1057,7 +1063,7 @@ class AskShowPlace(smach.State):
             self.service_preempt()
             return 'preempted'
 
-        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.target_frame)
+        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.goal_frame)
 
         # If a verbalized/label name exists in the ontology, it is used
         if target_name.code == 0:
@@ -1065,7 +1071,7 @@ class AskShowPlace(smach.State):
 
         # If there is not, the 'technical' name is used
         else:
-            target_name_value = userdata.target_frame
+            target_name_value = userdata.goal_frame
 
         if HWU_DIAL:
             if not userdata.target_out_region:
@@ -1212,11 +1218,6 @@ class VerbalizeRoute(smach.State):
         return 'succeeded'
 
 
-# TODO: cas pas de mesh meme region
-
-DIRECTION_INDEX = 2
-
-
 class PointingConfig(smach_ros.SimpleActionState):
     """Calls the pointing planner to get the best configuration (pose) for the human and the robot
 
@@ -1266,7 +1267,7 @@ class PointingConfig(smach_ros.SimpleActionState):
                                              PointingAction, goal_cb=self.pointing_config_goal_cb,
                                              feedback_cb=self.pointing_config_feedback_cb,
                                              result_cb=self.pointing_config_result_cb,
-                                             input_keys=['goal_frame', 'person_frame', 'route',
+                                             input_keys=['goal_frame', 'person_frame', 'route', 'direction',
                                                          'human_look_at_point', 'second_pointing_config'],
                                              output_keys=['target_pose', 'landmarks_to_point', 'human_pose',
                                                           'second_pointing_config'],
@@ -1289,11 +1290,8 @@ class PointingConfig(smach_ros.SimpleActionState):
             PointingConfig.has_been_in_state = False
 
         goal_frame = ""
-        # if there is a direction landmark in the route list returned by the route planner
-        if len(userdata.route) > DIRECTION_INDEX+1:
-            PointingConfig.direction_landmark = userdata.route[DIRECTION_INDEX]
-        else:
-            PointingConfig.direction_landmark = ""
+
+        PointingConfig.direction_landmark = userdata.direction
 
         # Check if it exists an associated mesh to the goal
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
@@ -1379,7 +1377,7 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
                                              PointingAction, goal_cb=self.pointing_config_goal_cb,
                                              feedback_cb=self.pointing_config_feedback_cb,
                                              result_cb=self.pointing_config_result_cb,
-                                             input_keys=['goal_frame', 'person_frame', 'route',
+                                             input_keys=['goal_frame', 'person_frame', 'route', 'direction',
                                                          'human_look_at_point'],
                                              output_keys=['target_pose'],
                                              server_wait_timeout=rospy.Duration(5))
@@ -1395,11 +1393,8 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
 
         goal_frame = ""
-        # if there is a direction landmark in the route list returned by the route planner
-        if len(userdata.route) > DIRECTION_INDEX+1:
-            PointingConfig.direction_landmark = userdata.route[DIRECTION_INDEX]
-        else:
-            PointingConfig.direction_landmark = ""
+
+        PointingConfig.direction_landmark = userdata.direction
 
         # Check if it exists an associated mesh to the target
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
@@ -1545,11 +1540,11 @@ class ShouldHumanMove(smach.State):
                     # rospy.logwarn("dist robot now human future : %f", distance_r_now_h_future)
                     # if the distance is inferior to the threshold, the human should take the actual robot place,
                     # therefore the robot should move first
-                    if distance_r_now_h_future < TAKE_ROBOT_PLACE_DIST_TH:
-                        return 'robot_first'
-                    # the human wanted pose is at a certain distance of the robot, the human can move first
-                    else:
-                        return 'human_first'
+                    # if distance_r_now_h_future < TAKE_ROBOT_PLACE_DIST_TH:
+                    return 'robot_first'
+                    # # the human wanted pose is at a certain distance of the robot, the human can move first
+                    # else:
+                    #     return 'human_first'
 
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
                     rospy.logerr('tf exception')
@@ -1978,12 +1973,14 @@ class LookAtAssumedPlace(smach.State):
         rospy.sleep(1)
 
         if not human_perceived:
-            if self.does_not_see < 5:
-                self.does_not_see += 1
+            if LookAtAssumedPlace.does_not_see < 5:
+                LookAtAssumedPlace.does_not_see += 1
                 return 'look_again'
             else:
+                LookAtAssumedPlace.does_not_see = 0
                 return 'human_lost'
         else:
+            LookAtAssumedPlace.does_not_see = 0
             return 'succeeded'
 
 
@@ -2008,11 +2005,11 @@ class CheckPerceived(smach.State):
         return self.__class__.__name__
 
     def execute(self, userdata):
-        self.does_not_see += 1
+        CheckPerceived.does_not_see += 1
         if not human_perceived:
-            if self.does_not_see < 2:
+            if CheckPerceived.does_not_see < 4:
                 # TODO: verba HWU
-                if self.does_not_see == 1:
+                if CheckPerceived.does_not_see == 1:
                     GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                         "I am sorry, I cannot see you. Where are you ?",
                                                         SPEECH_PRIORITY)
@@ -2022,10 +2019,10 @@ class CheckPerceived(smach.State):
                 #                                         SPEECH_PRIORITY)
                 return 'wait'
             else:
-                self.does_not_see = 0
+                CheckPerceived.does_not_see = 0
                 return 'aborted'
         else:
-            self.does_not_see = 0
+            CheckPerceived.does_not_see = 0
             return 'succeeded'
 
 
@@ -2370,7 +2367,7 @@ class SelectLandmark(smach.State):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['point_not_visible', 'point_direction',
                                              'point_target', 'preempted', 'aborted'],
-                             input_keys=['goal_frame', 'route', 'landmarks_to_point', 'human_look_at_point'],
+                             input_keys=['goal_frame', 'route', 'landmarks_to_point', 'human_look_at_point', 'direction'],
                              output_keys=['landmark_to_point'])
 
     def get_name(self):
@@ -2378,11 +2375,6 @@ class SelectLandmark(smach.State):
 
     def execute(self, userdata):
         """It computes what should be point at."""
-        # if a direction exists in the route returned by the route planner, it takes its value, otherwise it remains
-        # empty
-        direction = ""
-        if len(userdata.route) > DIRECTION_INDEX+1:
-            direction = userdata.route[DIRECTION_INDEX]
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
@@ -2402,8 +2394,8 @@ class SelectLandmark(smach.State):
                 return 'point_not_visible'
         # second pass in the state, the direction has to be pointed
         else:
-            userdata.landmark_to_point = (direction, LANDMARK_TYPE_DIRECTION)
-            if direction in userdata.landmarks_to_point:
+            userdata.landmark_to_point = (userdata.direction, LANDMARK_TYPE_DIRECTION)
+            if userdata.direction in userdata.landmarks_to_point:
                 return 'point_direction'
             else:
                 return 'point_not_visible'
@@ -2431,7 +2423,7 @@ class PointNotVisible(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
-                             input_keys=['landmark_to_point', 'human_look_at_point', 'route', 'target_frame',
+                             input_keys=['landmark_to_point', 'human_look_at_point', 'route', 'goal_frame',
                                          'person_frame', 'persona'])
         self._tfBuffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tfBuffer)
@@ -2583,8 +2575,8 @@ class PointAndLookAtLandmark(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
-                             input_keys=['person_frame', 'target_frame', 'landmark_to_point', 'human_look_at_point',
-                                         'route', 'persona'])
+                             input_keys=['person_frame', 'goal_frame', 'landmark_to_point', 'human_look_at_point',
+                                         'route', 'persona', 'route_2_shop_w_sign'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -2666,7 +2658,7 @@ class PointAndLookAtLandmark(smach.State):
             if not can_point_at:
                 rospy.logwarn("cannot point")
             GuidingAction.sm_test_rotation.userdata.route = userdata.route
-            GuidingAction.sm_test_rotation.userdata.target_frame = userdata.target_frame
+            GuidingAction.sm_test_rotation.userdata.target_frame = userdata.goal_frame
             GuidingAction.sm_test_rotation.userdata.person_frame = userdata.person_frame
             GuidingAction.sm_test_rotation.userdata.human_look_at_point = userdata.human_look_at_point
             GuidingAction.sm_test_rotation.set_initial_state(['GetRotationAngle'])
@@ -2716,7 +2708,12 @@ class PointAndLookAtLandmark(smach.State):
 
         route = userdata.route
         if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-            route = route[0:DIRECTION_INDEX+1]
+            get_up = GuidingAction.services_proxy["get_individual_info"]("getUp",
+                                                                         userdata.goal_frame).values
+            if "signpost" in get_up:
+                route = userdata.route_2_shop_w_sign[0:DIRECTION_INDEX+1]
+            else:
+                route = route[0:DIRECTION_INDEX+1]
             rospy.logwarn("route to direction %s", route)
 
         route_description = GuidingAction.services_proxy["get_route_description"](
@@ -3230,7 +3227,7 @@ class IsOver(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'point_direction', 'preempted', 'aborted'],
-                             input_keys=['landmark_to_point', 'landmarks_to_point', 'last_outcome', 'route',
+                             input_keys=['landmark_to_point', 'landmarks_to_point', 'last_outcome', 'route', 'direction',
                                          'human_look_at_point'])
 
     def get_name(self):
@@ -3253,7 +3250,8 @@ class IsOver(smach.State):
         #         (userdata.landmark_to_point[LANDMARK_NAME] not in userdata.landmarks_to_point
         #          and len(userdata.landmarks_to_point) == 1):
 
-        if len(userdata.route) > DIRECTION_INDEX+1 and userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
+        # if len(userdata.route) > DIRECTION_INDEX+1 and userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
+        if userdata.direction != "" and userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
             return 'point_direction'
         # if the human does want to see the landmark again
         elif userdata.last_outcome == 'no':
