@@ -262,6 +262,11 @@ class GuidingAction(object):
                                               output_keys=['last_state', 'last_outcome', 'person_frame'])
 
             with self.show_sm:
+                smach.StateMachine.add('ShouldCallPointingConfig', ShouldCallPointingConfig(),
+                                       transitions={'succeeded': 'PointingConfig',
+                                                    'point_not_visible': 'SelectLandmark',
+                                                    'preempted': 'preempted'})
+
                 smach.StateMachine.add('PointingConfig', PointingConfig(),
                                        transitions={'succeeded': 'ShouldHumanMove',
                                                     'point_not_visible': 'SelectLandmark',
@@ -811,7 +816,7 @@ class GuidingAction(object):
         if not start_waiting_goal:
             self.top_sm.set_initial_state(['GUIDING_MONITORING'])
             self.guiding_sm.set_initial_state(['GetRouteRegion'])
-            self.show_sm.set_initial_state(['PointingConfig'])
+            self.show_sm.set_initial_state(['ShouldCallPointingConfig'])
             # userdata which needs to be initialized
             self.top_sm.userdata.person_frame = goal.person_frame
             self.guiding_sm.userdata.target_frame = goal.place_frame
@@ -1218,6 +1223,49 @@ class VerbalizeRoute(smach.State):
         return 'succeeded'
 
 
+class ShouldCallPointingConfig(smach.State):
+    def __init__(self):
+        rospy.loginfo("Initialization of " + self.get_name() + " state")
+        smach.State.__init__(self, outcomes=['point_not_visible', 'succeeded', 'preempted'],
+                             input_keys=['goal_frame', 'person_frame', 'route', 'direction',
+                                         'human_look_at_point', 'second_pointing_config'],
+                             output_keys=['target_pose', 'landmarks_to_point', 'human_pose',
+                                          'second_pointing_config'])
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    def execute(self, userdata):
+
+        if self.preempt_requested():
+            rospy.loginfo(self.get_name() + " preempted")
+            self.service_preempt()
+            return 'preempted'
+
+        count = 0
+
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            # if there is no mesh, the target_frame remains empty
+            if not has_mesh_result.has_mesh:
+                count += 1
+
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.direction)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            # if there is no mesh, the target_frame remains empty
+            if not has_mesh_result.has_mesh:
+                count += 1
+
+        if count == 2:
+            return 'point_not_visible'
+        else:
+            return 'succeeded'
+
+
 class PointingConfig(smach_ros.SimpleActionState):
     """Calls the pointing planner to get the best configuration (pose) for the human and the robot
 
@@ -1302,16 +1350,23 @@ class PointingConfig(smach_ros.SimpleActionState):
             if has_mesh_result.has_mesh:
                 goal_frame = userdata.goal_frame
             else:
-                # do not take into account the case where the direction landmark has no mesh
-                # (probably should not happen)
                 rospy.logwarn("goal frame has no mesh")
                 goal_frame = PointingConfig.direction_landmark
+                PointingConfig.direction_landmark = ""
+
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.direction)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            if not has_mesh_result.has_mesh:
+                rospy.logwarn("direction has no mesh")
                 PointingConfig.direction_landmark = ""
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
         pointing_planner_goal.target_landmark = goal_frame
         pointing_planner_goal.direction_landmark = PointingConfig.direction_landmark
+        rospy.logerr(pointing_planner_goal)
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
@@ -1324,7 +1379,7 @@ class PointingConfig(smach_ros.SimpleActionState):
         # pass
 
     @staticmethod
-    @smach.cb_interface(outcomes=['point_not_visible'], input_keys=['goal_frame', 'landmarks_to_point', 'route'],
+    @smach.cb_interface(outcomes=['point_not_visible'], input_keys=['goal_frame', 'landmarks_to_point', 'route', 'direction'],
                         output_keys=['target_pose', 'landmarks_to_point', 'human_pose'])
     def pointing_config_result_cb(userdata, status, result):
         userdata.landmarks_to_point = []
@@ -1344,8 +1399,8 @@ class PointingConfig(smach_ros.SimpleActionState):
             # remplissage du tableau dans l'ordre target s'il y en a une, puis direction
             if userdata.goal_frame in result.pointed_landmarks:
                 userdata.landmarks_to_point.append(userdata.goal_frame)
-            if PointingConfig.direction_landmark in result.pointed_landmarks:
-                userdata.landmarks_to_point.append(PointingConfig.direction_landmark)
+            if userdata.direction in result.pointed_landmarks:
+                userdata.landmarks_to_point.append(userdata.direction)
             rospy.logwarn("landmarks to point : %s", userdata.landmarks_to_point)
 
             # if self.preempt_requested():
@@ -1392,11 +1447,11 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
         GuidingAction.feedback.current_step = "get_pointing_config"
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
 
-        goal_frame = ""
+        ggoal_frame = ""
 
         PointingConfig.direction_landmark = userdata.direction
 
-        # Check if it exists an associated mesh to the target
+        # Check if it exists an associated mesh to the goal
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
         if not has_mesh_result.success:
             rospy.logerr("has_mesh service failed")
@@ -1404,6 +1459,18 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
             # if there is no mesh, the target_frame remains empty
             if has_mesh_result.has_mesh:
                 goal_frame = userdata.goal_frame
+            else:
+                rospy.logwarn("goal frame has no mesh")
+                goal_frame = PointingConfig.direction_landmark
+                PointingConfig.direction_landmark = ""
+
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.direction)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            if not has_mesh_result.has_mesh:
+                rospy.logwarn("direction has no mesh")
+                PointingConfig.direction_landmark = ""
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
