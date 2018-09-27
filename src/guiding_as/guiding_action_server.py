@@ -2263,7 +2263,7 @@ class GetRotationAngle(smach_ros.SimpleActionState):
             PointingConfig.direction_landmark = userdata.route[DIRECTION_INDEX]
 
         # Check if it exists an associated mesh to the target
-        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, g_goal_frame)
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
         if not has_mesh_result.success:
             rospy.logerr("has_mesh service failed")
         else:
