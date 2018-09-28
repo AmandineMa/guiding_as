@@ -2435,17 +2435,33 @@ class PointNotVisible(smach.State):
             if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
                 route = route[0:DIRECTION_INDEX+1]
 
-            route_description = GuidingAction.services_proxy["get_route_description"](
-                route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
-            # rospy.logwarn("call route_verbalization : %s, %s, %s", route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME])
+            case = 0
+            # if the direction does not exist (target in same area)
+            if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET and len(
+                    userdata.route) == NO_INTERFACE_LEN:
+                case = 0
+            # if both exists (target in a different area)
+            elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
+                case = 1
+            # point the direction if it exists, no matter the existence of the target
+            elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
+                case = 2
+
             if HWU_DIAL:
-                # TODO: change verba
+                route_description = GuidingAction.services_proxy["get_route_description"](
+                    route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_TYPE]).region_route
                 GuidingAction.services_proxy["dialogue_inform"]("clarification.route_different_region",
                                                                 json.dumps(route_description))
             else:
-                GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
-                                                    SPEECH_PRIORITY)
-                rospy.logwarn(route_description)
+                if case == 0 or case == 2:
+                    route_description = GuidingAction.services_proxy["get_route_description"](
+                        userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
+                                                        SPEECH_PRIORITY)
+                    rospy.logwarn(route_description)
+                elif case == 1:
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "It's in this direction",
+                                                        SPEECH_PRIORITY)
 
             rospy.sleep(POINTING_DURATION)
             GuidingAction.services_proxy["rest_arm"]("Arms")
@@ -2593,18 +2609,33 @@ class PointAndLookAtLandmark(smach.State):
                 route = route[0:DIRECTION_INDEX+1]
             rospy.logwarn("route to direction %s", route)
 
-        route_description = GuidingAction.services_proxy["get_route_description"](
-            route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
-        # rospy.logwarn("call route_verbalization : %s, %s, %s", route, ROBOT_PLACE,
-        #               userdata.landmark_to_point[LANDMARK_NAME])
+        case = 0
+        # if the direction does not exist (target in same area)
+        if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET and len(userdata.route) == NO_INTERFACE_LEN:
+            case = 0
+        # if both exists (target in a different area)
+        elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
+            case = 1
+        # point the direction if it exists, no matter the existence of the target
+        elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
+            case = 2
+
         if HWU_DIAL:
             # TODO: change verba
+            route_description = GuidingAction.services_proxy["get_route_description"](
+                route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_TYPE]).region_route
             GuidingAction.services_proxy["dialogue_inform"]("clarification.route_different_region",
                                                             json.dumps(route_description))
         else:
-            GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
-                                                SPEECH_PRIORITY)
-            rospy.logwarn(route_description)
+            if case == 0 or case == 2:
+                route_description = GuidingAction.services_proxy["get_route_description"](
+                    userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
+                GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
+                                                    SPEECH_PRIORITY)
+                rospy.logwarn(route_description)
+            elif case == 1:
+                GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Look, it's there",
+                                                    SPEECH_PRIORITY)
 
         rospy.sleep(POINTING_DURATION)
 
