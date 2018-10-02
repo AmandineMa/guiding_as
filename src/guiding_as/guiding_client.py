@@ -10,7 +10,7 @@ from guiding_as.msg import *
 
 def show_client():
 
-    client = actionlib.SimpleActionClient('guiding_action_server', taskAction)
+    client = actionlib.SimpleActionClient('/task_route_descr', taskAction)
 
     # Waits until the action server has started up and started
     # listening for goals.
@@ -18,7 +18,7 @@ def show_client():
     client.wait_for_server()
     rospy.loginfo("send goal")
     # Creates a goal to send to the action server.
-    goal = taskGoal(place_frame='burger_king', person_frame="human-3")
+    goal = taskGoal(place_frame='Zizzi', person_frame="human-3")
 
     # Sends the goal to the action server.
     client.send_goal(goal)

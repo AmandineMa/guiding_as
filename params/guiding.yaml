@@ -4,7 +4,7 @@ guiding:
     alpha : 110
 
   dialogue:
-    hwu: False
+    hwu: True
 
   services:
     stand_pose: /naoqi_driver/robot_posture/go_to_posture
@@ -25,6 +25,8 @@ guiding:
     start_fact: /uwds_ros_bridge/start_fact
     end_fact: /uwds_ros_bridge/end_fact
     find_alternate_id: /multimodal_human_monitor/find_alternate_id
+    dialogue_inform: /rpn_supervision_server/inform
+    dialogue_query: /rpn_supervision_server/query
 
     activate_dialogue: /activate
     deactivate_dialogue: /deactivate
@@ -50,8 +52,11 @@ guiding:
     lost_perception_timeout: 10 #seconds
     observe_landmark_timeout: 3 #seconds
     stop_when_human_lost: False
-    signpost: False
+    signpost: True
 
   perspective:
     world: base
-    robot_place: robot_infodesk
+    robot_place: pepper_infodesk
+
+  debug:
+    log_level: DEBUG

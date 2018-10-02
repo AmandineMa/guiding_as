@@ -190,17 +190,17 @@ class GuidingAction(object):
             "is_visible": ServiceWrapper(is_visible_srv, VisibilityScore),
             "has_mesh": ServiceWrapper(has_mesh_srv, HasMesh),
             "get_individual_info": ServiceWrapper(get_individual_info_srv, OntologeniusService),
-            "can_look_at": rospy.ServiceProxy(can_look_at_srv, CanLookAt),
-            "can_point_at": rospy.ServiceProxy(can_point_at_srv, CanPointAt),
-            "look_at": rospy.ServiceProxy(look_at_srv, LookAt),
-            "point_at": rospy.ServiceProxy(point_at_srv, PointAt),
+            "can_look_at": ServiceWrapper(can_look_at_srv, CanLookAt),
+            "can_point_at": ServiceWrapper(can_point_at_srv, CanPointAt),
+            "look_at": ServiceWrapper(look_at_srv, LookAt),
+            "point_at": ServiceWrapper(point_at_srv, PointAt),
             "rest_arm": rospy.ServiceProxy(rest_arm_srv, RestArm),
             "monitor_humans": rospy.ServiceProxy(monitor_humans_srv, MonitorHumans),
             "start_fact": rospy.ServiceProxy(start_fact_srv, StartFact),
             "end_fact": rospy.ServiceProxy(start_fact_srv, EndFact),
             "find_alternate_id": rospy.ServiceProxy(find_alternate_id_srv, FindAlternateId),
-            "dialogue_inform": ServiceWrapper(dialogue_inform_srv, RPInform),
-            "dialogue_query": ServiceWrapper(dialogue_query_srv, RPQuery)}
+            "dialogue_inform": ServiceWrapper(dialogue_inform_srv, SuperInform),
+            "dialogue_query": ServiceWrapper(dialogue_query_srv, SuperQuery)}
             # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
             # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
 
@@ -1619,15 +1619,15 @@ class ShouldHumanMove(smach.State):
                         userdata.dist_r_h_fut = distance_r_now_h_future
                         return 'robot_first_far'
 
-                except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                    rospy.logerr('tf exception')
+                except Exception as e:
+                    rospy.logerr(e)
                     return 'aborted'
 
             else:
                 return 'no'
 
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            rospy.logerr('tf exception')
+        except Exception as e:
+            rospy.logerr(e)
             return 'aborted'
 
 
@@ -2038,8 +2038,8 @@ class ShouldRobotMove(smach.State):
                 return 'yes'
             else:
                 return 'no'
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            rospy.logerr('tf exception')
+        except Exception as e:
+            rospy.logerr(e)
             return 'aborted'
 
 
@@ -2446,13 +2446,13 @@ class PointNotVisible(smach.State):
             if HWU_DIAL:
                 if case == 0 or case == 2:
                     route_description = GuidingAction.services_proxy["get_route_description"](
-                        userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_TYPE]).region_route
+                        userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
                     GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
                                                                     json.dumps(route_description))
                 elif case == 1:
                     GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
                                                                     json.dumps([userdata.landmark_to_point[
-                                                                                    LANDMARK_TYPE], case]))
+                                                                                    LANDMARK_NAME], case]))
             else:
                 if case == 0 or case == 2:
                     route_description = GuidingAction.services_proxy["get_route_description"](
@@ -2573,12 +2573,12 @@ class PointAndLookAtLandmark(smach.State):
         point_stamped = PointStamped()
         point_stamped.header.frame_id = userdata.person_frame
 
-        can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
+        can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
 
-        if not can_look_at_resp.success:
-            rospy.logwarn("cannot look")
+        if not can_point_at_resp.success:
+            rospy.logwarn("cannot point")
 
-            GuidingAction.sm_test_rotation.userdata.rotation = can_look_at_resp.angle
+            GuidingAction.sm_test_rotation.userdata.rotation = can_point_at_resp.angle
             GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
             GuidingAction.sm_test_rotation.execute()
 
@@ -2624,13 +2624,13 @@ class PointAndLookAtLandmark(smach.State):
         if HWU_DIAL:
             if case == 0 or case == 2:
                 route_description = GuidingAction.services_proxy["get_route_description"](
-                    userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_TYPE]).region_route
+                    userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
                 GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
                                                                 json.dumps(route_description))
             elif case == 1:
                 GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
                                                                 json.dumps([userdata.landmark_to_point[
-                                                                                LANDMARK_TYPE], case]))
+                                                                                LANDMARK_NAME], case]))
         else:
             if case == 0 or case == 2:
                 route_description = GuidingAction.services_proxy["get_route_description"](
@@ -2654,6 +2654,7 @@ class PointAndLookAtLandmark(smach.State):
         if point_at.success:
             return 'succeeded'
         else:
+            rospy.logwarn("point at success false")
             return 'aborted'
 
 
@@ -3169,10 +3170,11 @@ class IsOver(smach.State):
             return 'aborted'
         # what had to be shown is shown properly
         else:
-            if HWU_DIAL:
-                # TODO add verba
-                GuidingAction.services_proxy["dialogue_inform"]("end_interaction", "")
-            else:
+            # if HWU_DIAL:
+            #     # TODO add verba
+            #     GuidingAction.services_proxy["dialogue_inform"]("end_interaction", "")
+            # else:
+            if not HWU_DIAL:
                 GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Have a nice day", SPEECH_PRIORITY)
             return 'succeeded'
 
