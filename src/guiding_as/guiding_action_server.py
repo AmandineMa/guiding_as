@@ -53,6 +53,7 @@ LOST_PERCEPTION_TIMEOUT = 0
 OBSERVE_LANDMARK_TIMEOUT = 0
 HWU_DIAL = False
 SIGNPOST = False
+HUMAN_FOLLOW = True
 
 # supervisor constants
 SPEECH_PRIORITY = 250
@@ -83,6 +84,9 @@ class GuidingAction(object):
         self.show_userdata = None
         self.SavedGoal = namedtuple("SavedGoal", "target_frame person_frame")
         self.SavedEnv = namedtuple("SavedEnv", "goal interrupted_state top_ud guiding_ud show_ud")
+
+        global HUMAN_FOLLOW
+        HUMAN_FOLLOW = rospy.get_param('/guiding/tuning_param/human_follow')
 
         GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
                                                                    execute_cb=self.execute_cb,
@@ -117,63 +121,64 @@ class GuidingAction(object):
         GuidingAction.coord_signals_publisher = rospy.Publisher(rospy.get_param('/guiding/topics/coord_signals'),
                                                                 CoordinationSignal, queue_size=5)
 
-        rospy.loginfo("waiting for service " + stand_pose_srv)
-        rospy.wait_for_service(stand_pose_srv)
 
-        rospy.loginfo("waiting for service " + say_srv)
-        rospy.wait_for_service(say_srv)
-
-        # rospy.loginfo("waiting for service " + get_route_region_srv)
-        # rospy.wait_for_service(get_route_region_srv)
-
-        rospy.loginfo("waiting for service " + get_route_srv)
-        rospy.wait_for_service(get_route_srv)
-
-        rospy.loginfo("waiting for service " + get_route_description_srv)
-        rospy.wait_for_service(get_route_description_srv)
-
-        rospy.loginfo("waiting for service " + has_mesh_srv)
-        rospy.wait_for_service(has_mesh_srv)
-
-        rospy.loginfo("waiting for service " + is_visible_srv)
-        rospy.wait_for_service(is_visible_srv)
-
-        rospy.loginfo("waiting for service " + get_individual_info_srv)
-        rospy.wait_for_service(get_individual_info_srv)
-
-        rospy.loginfo("waiting for service " + can_look_at_srv)
-        rospy.wait_for_service(can_look_at_srv)
-
-        rospy.loginfo("waiting for service " + can_point_at_srv)
-        rospy.wait_for_service(can_point_at_srv)
-
-        rospy.loginfo("waiting for service " + look_at_srv)
-        rospy.wait_for_service(look_at_srv)
-
-        rospy.loginfo("waiting for service " + point_at_srv)
-        rospy.wait_for_service(point_at_srv)
-
-        rospy.loginfo("waiting for service " + rest_arm_srv)
-        rospy.wait_for_service(rest_arm_srv)
-
-        rospy.loginfo("waiting for service " + monitor_humans_srv)
-        rospy.wait_for_service(monitor_humans_srv)
-
-        rospy.loginfo("waiting for service " + start_fact_srv)
-        rospy.wait_for_service(start_fact_srv)
-
-        rospy.loginfo("waiting for service " + end_fact_srv)
-        rospy.wait_for_service(end_fact_srv)
-
-        rospy.loginfo("waiting for service " + find_alternate_id_srv)
-        rospy.wait_for_service(find_alternate_id_srv)
-
-        if rospy.get_param('/guiding/dialogue/hwu'):
-            rospy.loginfo("waiting for service " + dialogue_inform_srv)
-            rospy.wait_for_service(dialogue_inform_srv)
-
-            rospy.loginfo("waiting for service " + dialogue_query_srv)
-            rospy.wait_for_service(dialogue_query_srv)
+        # rospy.loginfo("waiting for service " + stand_pose_srv)
+        # rospy.wait_for_service(stand_pose_srv)
+        #
+        # rospy.loginfo("waiting for service " + say_srv)
+        # rospy.wait_for_service(say_srv)
+        #
+        # # rospy.loginfo("waiting for service " + get_route_region_srv)
+        # # rospy.wait_for_service(get_route_region_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_route_srv)
+        # rospy.wait_for_service(get_route_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_route_description_srv)
+        # rospy.wait_for_service(get_route_description_srv)
+        #
+        # rospy.loginfo("waiting for service " + has_mesh_srv)
+        # rospy.wait_for_service(has_mesh_srv)
+        #
+        # rospy.loginfo("waiting for service " + is_visible_srv)
+        # rospy.wait_for_service(is_visible_srv)
+        #
+        # rospy.loginfo("waiting for service " + get_individual_info_srv)
+        # rospy.wait_for_service(get_individual_info_srv)
+        #
+        # rospy.loginfo("waiting for service " + can_look_at_srv)
+        # rospy.wait_for_service(can_look_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + can_point_at_srv)
+        # rospy.wait_for_service(can_point_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + look_at_srv)
+        # rospy.wait_for_service(look_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + point_at_srv)
+        # rospy.wait_for_service(point_at_srv)
+        #
+        # rospy.loginfo("waiting for service " + rest_arm_srv)
+        # rospy.wait_for_service(rest_arm_srv)
+        #
+        # rospy.loginfo("waiting for service " + monitor_humans_srv)
+        # rospy.wait_for_service(monitor_humans_srv)
+        #
+        # rospy.loginfo("waiting for service " + start_fact_srv)
+        # rospy.wait_for_service(start_fact_srv)
+        #
+        # rospy.loginfo("waiting for service " + end_fact_srv)
+        # rospy.wait_for_service(end_fact_srv)
+        #
+        # rospy.loginfo("waiting for service " + find_alternate_id_srv)
+        # rospy.wait_for_service(find_alternate_id_srv)
+        #
+        # if rospy.get_param('/guiding/dialogue/hwu'):
+        #     rospy.loginfo("waiting for service " + dialogue_inform_srv)
+        #     rospy.wait_for_service(dialogue_inform_srv)
+        #
+        #     rospy.loginfo("waiting for service " + dialogue_query_srv)
+        #     rospy.wait_for_service(dialogue_query_srv)
 
         # rospy.loginfo("waiting for service " + activate_dialogue_srv)
         # rospy.wait_for_service(activate_dialogue_srv)
@@ -280,25 +285,75 @@ class GuidingAction(object):
                                                     'aborted': 'show_failed',
                                                     'preempted': 'preempted'})
 
-                smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
-                                       transitions={'robot_first_far': 'AskHumanToFollow',
-                                                    'no': 'ShouldRobotMoveX',
-                                                    'robot_first': 'AskHumanToMoveAfter', 'aborted': 'show_failed',
+                look_at_human_assumed_place = smach.StateMachine(
+                    outcomes=['look_succeeded', 'look_failed', 'preempted'],
+                    input_keys=['human_pose', 'human_look_at_point', 'person_frame'])
+
+                with look_at_human_assumed_place:
+                    smach.StateMachine.add('LookAtAssumedPlace', LookAtAssumedPlace(),
+                                           transitions={'succeeded': 'look_succeeded', 'preempted': 'preempted',
+                                                        'human_lost': 'LookAtHuman',
+                                                        'look_again': 'LookAtAssumedPlace'})
+
+                    smach.StateMachine.add('LookAtHuman', LookAtHuman(),
+                                           transitions={'succeeded': 'CheckPerceived', 'aborted': 'look_failed',
+                                                        'preempted': 'preempted'})
+
+                    smach.StateMachine.add('CheckPerceived', CheckPerceived(),
+                                           transitions={'succeeded': 'look_succeeded', 'aborted': 'look_failed',
+                                                        'wait': 'LookAtHuman', 'preempted': 'preempted'})
+
+                if HUMAN_FOLLOW:
+                    smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
+                                           transitions={'human_move': 'AskHumanToFollow',
+                                                        'no': 'ShouldRobotMoveX',
+                                                        'robot_first': 'AskHumanToMoveAfter', 'aborted': 'show_failed',
+                                                        'preempted': 'preempted'})
+
+                    smach.StateMachine.add('AskHumanToFollow', AskHumanToFollow(),
+                                           transitions={'succeeded': 'MoveToPoseY', 'preempted': 'preempted'})
+                else:
+                    smach.StateMachine.add('ShouldHumanMove', ShouldHumanMove(),
+                                           transitions={'human_move': 'PointAndLookAtHumanFuturePlace',
+                                                        'no': 'ShouldRobotMoveX',
+                                                        'robot_first': 'AskHumanToMoveAfter', 'aborted': 'show_failed',
+                                                        'preempted': 'preempted'})
+
+                    smach.StateMachine.add('PointAndLookAtHumanFuturePlace', PointAndLookAtHumanFuturePlace(),
+                                           transitions={'succeeded': 'LookAtHumanAssumedPlaceX',
+                                                        'aborted': 'show_failed',
+                                                        'preempted': 'preempted'})
+
+                    smach.StateMachine.add('LookAtHumanAssumedPlaceX', look_at_human_assumed_place,
+                                           transitions={'look_succeeded': 'AreLandmarksVisibleFromHuman',
+                                                        'look_failed': 'HumanLost', 'preempted': 'preempted'})
+
+                    smach.StateMachine.add('AreLandmarksVisibleFromHuman', AreLandmarksVisibleFromHuman(),
+                                           transitions={'landmarks_visible': 'PointingConfigForRobot',
+                                                        'landmark_s_not_visible': 'PointingConfig',
+                                                        'aborted': 'show_failed'})
+
+                    smach.StateMachine.add('PointingConfigForRobot', PointingConfigForRobot(),
+                                           transitions={'succeeded': 'ShouldRobotMoveX', 'aborted': 'show_failed'})
+
+                smach.StateMachine.add('ShouldRobotMoveX', ShouldRobotMove(),
+                                       transitions={'yes': 'MoveToPoseX', 'no': 'LookAtHumanX',
+                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
+
+                smach.StateMachine.add('MoveToPoseX', MoveToPose(),
+                                       transitions={'succeeded': 'LookAtHumanX',
+                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
+
+                smach.StateMachine.add('LookAtHumanX', LookAtHuman(),
+                                       transitions={'succeeded': 'SelectLandmark', 'aborted': 'show_failed',
                                                     'preempted': 'preempted'})
 
                 smach.StateMachine.add('AskHumanToMoveAfter', AskHumanToMoveAfter(),
                                        transitions={'succeeded': 'MoveToPoseY', 'preempted': 'preempted'})
 
-                smach.StateMachine.add('AskHumanToFollow', AskHumanToFollow(),
-                                       transitions={'succeeded': 'MoveToPoseY', 'preempted': 'preempted'})
-
                 # smach.StateMachine.add('ShouldRobotMove2', ShouldRobotMove(),
                 #                        transitions={'yes': 'MoveToPose2', 'no': 'LookAtHumanAssumedPlace2',
                 #                                     'preempted': 'preempted', 'aborted': 'show_failed'})
-
-                smach.StateMachine.add('PointAndLookAtHumanFuturePlace', PointAndLookAtHumanFuturePlace(),
-                                       transitions={'succeeded': 'LookAtHumanAssumedPlaceX', 'aborted': 'show_failed',
-                                                    'preempted': 'preempted'})
 
                 # human_tracking_concurrence = smach.Concurrence(
                 #     outcomes=['succeeded', 'continue_to_look', 'preempted', 'aborted', 'look_final_dest'],
@@ -322,27 +377,6 @@ class GuidingAction(object):
                 #                                     'look_final_dest': 'LookAtHumanAssumedPlaceX',
                 #                                     'preempted': 'show_failed', 'aborted': 'show_failed'})
 
-                look_at_human_assumed_place = smach.StateMachine(
-                    outcomes=['look_succeeded', 'look_failed', 'preempted'],
-                    input_keys=['human_pose', 'human_look_at_point', 'person_frame'])
-
-                with look_at_human_assumed_place:
-                    smach.StateMachine.add('LookAtAssumedPlace', LookAtAssumedPlace(),
-                                           transitions={'succeeded': 'look_succeeded', 'preempted': 'preempted',
-                                                        'human_lost': 'LookAtHuman', 'look_again': 'LookAtAssumedPlace'})
-
-                    smach.StateMachine.add('LookAtHuman', LookAtHuman(),
-                                           transitions={'succeeded': 'CheckPerceived', 'aborted': 'look_failed',
-                                                        'preempted': 'preempted'})
-
-                    smach.StateMachine.add('CheckPerceived', CheckPerceived(),
-                                           transitions={'succeeded': 'look_succeeded', 'aborted': 'look_failed',
-                                                        'wait': 'LookAtHuman', 'preempted': 'preempted'})
-
-                smach.StateMachine.add('LookAtHumanAssumedPlaceX', look_at_human_assumed_place,
-                                       transitions={'look_succeeded': 'AreLandmarksVisibleFromHuman',
-                                                    'look_failed': 'HumanLost', 'preempted': 'preempted'})
-
                 smach.StateMachine.add('HumanLost', HumanLost(), transitions={'human_lost': 'show_failed'})
 
                 # smach.StateMachine.add('ShouldHumanMove2', ShouldHumanMove(),
@@ -351,25 +385,7 @@ class GuidingAction(object):
                 #                                     'robot_first': 'show_failed', 'aborted': 'show_failed',
                 #                                     'preempted': 'preempted'})
 
-                smach.StateMachine.add('AreLandmarksVisibleFromHuman', AreLandmarksVisibleFromHuman(),
-                                       transitions={'landmarks_visible': 'PointingConfigForRobot',
-                                                    'landmark_s_not_visible': 'PointingConfig',
-                                                    'aborted': 'show_failed'})
 
-                smach.StateMachine.add('PointingConfigForRobot', PointingConfigForRobot(),
-                                       transitions={'succeeded': 'ShouldRobotMoveX', 'aborted': 'show_failed'})
-
-                smach.StateMachine.add('ShouldRobotMoveX', ShouldRobotMove(),
-                                       transitions={'yes': 'MoveToPoseX', 'no': 'LookAtHumanX',
-                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
-
-                smach.StateMachine.add('MoveToPoseX', MoveToPose(),
-                                       transitions={'succeeded': 'LookAtHumanX',
-                                                    'preempted': 'preempted', 'aborted': 'show_failed'})
-
-                smach.StateMachine.add('LookAtHumanX', LookAtHuman(),
-                                       transitions={'succeeded': 'SelectLandmark', 'aborted': 'show_failed',
-                                                    'preempted': 'preempted'})
 
                 smach.StateMachine.add('MoveToPoseY', MoveToPose(),
                                        transitions={'succeeded': 'LookAtHumanAssumedPlaceY',
@@ -1574,7 +1590,7 @@ class ShouldHumanMove(smach.State):
 
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
-        smach.State.__init__(self, outcomes=['robot_first', 'robot_first_far', 'no', 'preempted', 'aborted'],
+        smach.State.__init__(self, outcomes=['robot_first', 'human_move', 'no', 'preempted', 'aborted'],
                              input_keys=['person_frame', 'human_pose'], output_keys=['dist_r_h_fut'])
         self._tfBuffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tfBuffer)
@@ -1617,7 +1633,7 @@ class ShouldHumanMove(smach.State):
                     # the human wanted pose is at a certain distance of the robot, the human can move first
                     else:
                         userdata.dist_r_h_fut = distance_r_now_h_future
-                        return 'robot_first_far'
+                        return 'human_move'
 
                 except Exception as e:
                     rospy.logerr(e)

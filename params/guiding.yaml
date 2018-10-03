@@ -53,6 +53,7 @@ guiding:
     observe_landmark_timeout: 3 #seconds
     stop_when_human_lost: False
     signpost: True
+    human_follow: False
 
   perspective:
     world: base
