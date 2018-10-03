@@ -2135,7 +2135,7 @@ class GetRotationAngle(smach_ros.SimpleActionState):
                                              feedback_cb=self.pointing_config_feedback_cb,
                                              result_cb=self.pointing_config_result_cb,
                                              input_keys=['goal_frame', 'person_frame', 'route',
-                                                         'human_look_at_point'],
+                                                         'human_look_at_point', 'direction'],
                                              output_keys=['rotation'],
                                              server_wait_timeout=rospy.Duration(5))
 
@@ -2143,17 +2143,17 @@ class GetRotationAngle(smach_ros.SimpleActionState):
         return self.__class__.__name__
 
     def pointing_config_goal_cb(self, userdata, goal):
+        rospy.set_param('/pointing_planner/try_no_move', True)
         rospy.set_param('/pointing_planner/settings/mobrob', 0.0)
         rospy.set_param('/pointing_planner/settings/mobhum', 0.0)
         GuidingAction.feedback.current_step = "get_pointing_config"
         GuidingAction.action_server.publish_feedback(GuidingAction.feedback)
 
         goal_frame = ""
-        # if there is a direction landmark in the route list returned by the route planner
-        if len(userdata.route) > DIRECTION_INDEX+1:
-            PointingConfig.direction_landmark = userdata.route[DIRECTION_INDEX]
 
-        # Check if it exists an associated mesh to the target
+        GetRotationAngle.direction_landmark = userdata.direction
+
+        # Check if it exists an associated mesh to the goal
         has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.goal_frame)
         if not has_mesh_result.success:
             rospy.logerr("has_mesh service failed")
@@ -2161,11 +2161,23 @@ class GetRotationAngle(smach_ros.SimpleActionState):
             # if there is no mesh, the target_frame remains empty
             if has_mesh_result.has_mesh:
                 goal_frame = userdata.goal_frame
+            else:
+                rospy.logwarn("goal frame has no mesh")
+                goal_frame = GetRotationAngle.direction_landmark
+                GetRotationAngle.direction_landmark = ""
+
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, userdata.direction)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            if not has_mesh_result.has_mesh:
+                rospy.logwarn("direction has no mesh")
+                GetRotationAngle.direction_landmark = ""
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
         pointing_planner_goal.target_landmark = goal_frame
-        pointing_planner_goal.direction_landmark = PointingConfig.direction_landmark
+        pointing_planner_goal.direction_landmark = GetRotationAngle.direction_landmark
         return pointing_planner_goal
 
     def pointing_config_feedback_cb(self, userdata, feedback):
@@ -2247,7 +2259,7 @@ class RotateRobot(smach_ros.SimpleActionState):
                 point_stamped.header.frame_id = userdata.goal_frame
 
                 can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
-
+                rospy.logwarn(can_point_at_resp)
                 angle = QuaternionStamped()
                 angle.header.frame_id = 'base_footprint'
                 angle.quaternion.x, angle.quaternion.y, angle.quaternion.z, angle.quaternion.w = \
@@ -2544,7 +2556,7 @@ class PointAndLookAtLandmark(smach.State):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
                              input_keys=['person_frame', 'goal_frame', 'landmark_to_point', 'human_look_at_point',
-                                         'route', 'persona', 'route_2_shop_w_sign'])
+                                         'route', 'persona', 'route_2_shop_w_sign', 'direction'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -2571,6 +2583,7 @@ class PointAndLookAtLandmark(smach.State):
             GuidingAction.sm_test_rotation.userdata.goal_frame = userdata.goal_frame
             GuidingAction.sm_test_rotation.userdata.person_frame = userdata.person_frame
             GuidingAction.sm_test_rotation.userdata.human_look_at_point = userdata.human_look_at_point
+            GuidingAction.sm_test_rotation.userdata.direction = userdata.direction
             GuidingAction.sm_test_rotation.set_initial_state(['GetRotationAngle'])
             GuidingAction.sm_test_rotation.execute()
 
@@ -2616,15 +2629,15 @@ class PointAndLookAtLandmark(smach.State):
         point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
         point_at = GuidingAction.services_proxy["point_at"](point_at_request)
 
-        route = userdata.route
-        if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-            get_up = GuidingAction.services_proxy["get_individual_info"]("getUp",
-                                                                         userdata.goal_frame).values
-            if "signpost" in get_up:
-                route = userdata.route_2_shop_w_sign[0:DIRECTION_INDEX+1]
-            else:
-                route = route[0:DIRECTION_INDEX+1]
-            rospy.logwarn("route to direction %s", route)
+        # route = userdata.route
+        # if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
+        #     get_up = GuidingAction.services_proxy["get_individual_info"]("getUp",
+        #                                                                  userdata.goal_frame).values
+        #     if "signpost" in get_up:
+        #         route = userdata.route_2_shop_w_sign[0:DIRECTION_INDEX+1]
+        #     else:
+        #         route = route[0:DIRECTION_INDEX+1]
+        #     rospy.logwarn("route to direction %s", route)
 
         case = 0
         # if the direction does not exist (target in same area)
