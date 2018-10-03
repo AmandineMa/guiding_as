@@ -180,11 +180,11 @@ class GuidingAction(object):
             rospy.loginfo("waiting for service " + dialogue_query_srv)
             rospy.wait_for_service(dialogue_query_srv)
 
-        rospy.loginfo("waiting for service " + activate_dialogue_srv)
-        rospy.wait_for_service(activate_dialogue_srv)
-
-        rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
-        rospy.wait_for_service(deactivate_dialogue_srv)
+        # rospy.loginfo("waiting for service " + activate_dialogue_srv)
+        # rospy.wait_for_service(activate_dialogue_srv)
+        #
+        # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
+        # rospy.wait_for_service(deactivate_dialogue_srv)
 
         GuidingAction.services_proxy = {
             "stand_pose": ServiceWrapper(stand_pose_srv, GoToPosture),
