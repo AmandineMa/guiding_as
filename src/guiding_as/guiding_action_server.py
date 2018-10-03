@@ -122,69 +122,69 @@ class GuidingAction(object):
                                                                 CoordinationSignal, queue_size=5)
 
 
-        # rospy.loginfo("waiting for service " + stand_pose_srv)
-        # rospy.wait_for_service(stand_pose_srv)
-        #
-        # rospy.loginfo("waiting for service " + say_srv)
-        # rospy.wait_for_service(say_srv)
-        #
-        # # rospy.loginfo("waiting for service " + get_route_region_srv)
-        # # rospy.wait_for_service(get_route_region_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_route_srv)
-        # rospy.wait_for_service(get_route_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_route_description_srv)
-        # rospy.wait_for_service(get_route_description_srv)
-        #
-        # rospy.loginfo("waiting for service " + has_mesh_srv)
-        # rospy.wait_for_service(has_mesh_srv)
-        #
-        # rospy.loginfo("waiting for service " + is_visible_srv)
-        # rospy.wait_for_service(is_visible_srv)
-        #
-        # rospy.loginfo("waiting for service " + get_individual_info_srv)
-        # rospy.wait_for_service(get_individual_info_srv)
-        #
-        # rospy.loginfo("waiting for service " + can_look_at_srv)
-        # rospy.wait_for_service(can_look_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + can_point_at_srv)
-        # rospy.wait_for_service(can_point_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + look_at_srv)
-        # rospy.wait_for_service(look_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + point_at_srv)
-        # rospy.wait_for_service(point_at_srv)
-        #
-        # rospy.loginfo("waiting for service " + rest_arm_srv)
-        # rospy.wait_for_service(rest_arm_srv)
-        #
-        # rospy.loginfo("waiting for service " + monitor_humans_srv)
-        # rospy.wait_for_service(monitor_humans_srv)
-        #
-        # rospy.loginfo("waiting for service " + start_fact_srv)
-        # rospy.wait_for_service(start_fact_srv)
-        #
-        # rospy.loginfo("waiting for service " + end_fact_srv)
-        # rospy.wait_for_service(end_fact_srv)
-        #
-        # rospy.loginfo("waiting for service " + find_alternate_id_srv)
-        # rospy.wait_for_service(find_alternate_id_srv)
-        #
-        # if rospy.get_param('/guiding/dialogue/hwu'):
-        #     rospy.loginfo("waiting for service " + dialogue_inform_srv)
-        #     rospy.wait_for_service(dialogue_inform_srv)
-        #
-        #     rospy.loginfo("waiting for service " + dialogue_query_srv)
-        #     rospy.wait_for_service(dialogue_query_srv)
+        rospy.loginfo("waiting for service " + stand_pose_srv)
+        rospy.wait_for_service(stand_pose_srv)
 
-        # rospy.loginfo("waiting for service " + activate_dialogue_srv)
-        # rospy.wait_for_service(activate_dialogue_srv)
-        #
-        # rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
-        # rospy.wait_for_service(deactivate_dialogue_srv)
+        rospy.loginfo("waiting for service " + say_srv)
+        rospy.wait_for_service(say_srv)
+
+        # rospy.loginfo("waiting for service " + get_route_region_srv)
+        # rospy.wait_for_service(get_route_region_srv)
+
+        rospy.loginfo("waiting for service " + get_route_srv)
+        rospy.wait_for_service(get_route_srv)
+
+        rospy.loginfo("waiting for service " + get_route_description_srv)
+        rospy.wait_for_service(get_route_description_srv)
+
+        rospy.loginfo("waiting for service " + has_mesh_srv)
+        rospy.wait_for_service(has_mesh_srv)
+
+        rospy.loginfo("waiting for service " + is_visible_srv)
+        rospy.wait_for_service(is_visible_srv)
+
+        rospy.loginfo("waiting for service " + get_individual_info_srv)
+        rospy.wait_for_service(get_individual_info_srv)
+
+        rospy.loginfo("waiting for service " + can_look_at_srv)
+        rospy.wait_for_service(can_look_at_srv)
+
+        rospy.loginfo("waiting for service " + can_point_at_srv)
+        rospy.wait_for_service(can_point_at_srv)
+
+        rospy.loginfo("waiting for service " + look_at_srv)
+        rospy.wait_for_service(look_at_srv)
+
+        rospy.loginfo("waiting for service " + point_at_srv)
+        rospy.wait_for_service(point_at_srv)
+
+        rospy.loginfo("waiting for service " + rest_arm_srv)
+        rospy.wait_for_service(rest_arm_srv)
+
+        rospy.loginfo("waiting for service " + monitor_humans_srv)
+        rospy.wait_for_service(monitor_humans_srv)
+
+        rospy.loginfo("waiting for service " + start_fact_srv)
+        rospy.wait_for_service(start_fact_srv)
+
+        rospy.loginfo("waiting for service " + end_fact_srv)
+        rospy.wait_for_service(end_fact_srv)
+
+        rospy.loginfo("waiting for service " + find_alternate_id_srv)
+        rospy.wait_for_service(find_alternate_id_srv)
+
+        if rospy.get_param('/guiding/dialogue/hwu'):
+            rospy.loginfo("waiting for service " + dialogue_inform_srv)
+            rospy.wait_for_service(dialogue_inform_srv)
+
+            rospy.loginfo("waiting for service " + dialogue_query_srv)
+            rospy.wait_for_service(dialogue_query_srv)
+
+        rospy.loginfo("waiting for service " + activate_dialogue_srv)
+        rospy.wait_for_service(activate_dialogue_srv)
+
+        rospy.loginfo("waiting for service " + deactivate_dialogue_srv)
+        rospy.wait_for_service(deactivate_dialogue_srv)
 
         GuidingAction.services_proxy = {
             "stand_pose": ServiceWrapper(stand_pose_srv, GoToPosture),
