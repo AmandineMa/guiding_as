@@ -74,6 +74,7 @@ class GuidingAction(object):
     dialogue_client = None
     services_proxy = {}
     sm_test_rotation = None
+    coord_signals_publisher = None
 
     def __init__(self, name):
         self._action_name = name
@@ -137,6 +138,9 @@ class GuidingAction(object):
             "dialogue_query": ServiceWrapper(self.dialogue_query_srv, SuperQuery)}
         # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
         # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
+
+        GuidingAction.coord_signals_publisher = rospy.Publisher(rospy.get_param('/guiding/topics/coord_signals'),
+                                                                CoordinationSignal, queue_size=5)
 
         self.guiding_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'],
                                              input_keys=['person_frame', 'human_look_at_point'],
@@ -1723,6 +1727,7 @@ class PointAndLookAtHumanFuturePlace(smach.State):
         coord_signal.expiration = rospy.Time() + rospy.Duration(2)
         # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.human_pose.header.frame_id + "\)"
         coord_signal.predicate = "isWaiting(robot," + userdata.human_pose.header.frame_id + ")"
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         point_at_request = PointAtRequest()
         point_at_request.point.header = userdata.human_pose.header
@@ -1813,6 +1818,7 @@ class LookAtAssumedPlace(smach.State):
         coord_signal.expiration = rospy.Time() + rospy.Duration(1)
         # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.human_pose.header.frame_id + "\)"
         coord_signal.predicate = "isWaiting(robot," + userdata.human_pose.header.frame_id + ")"
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         rospy.sleep(1)
 
@@ -2369,6 +2375,7 @@ class PointNotVisible(smach.State):
             coord_signal.expiration = rospy.Time() + rospy.Duration(2)
             # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
             coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
+            GuidingAction.coord_signals_publisher.publish(coord_signal)
 
             # TODO: mettre a la fin
             # if HWU_DIAL:
@@ -2412,22 +2419,23 @@ class PointAndLookAtLandmark(smach.State):
     def get_name(self):
         return self.__class__.__name__
 
-    def execute(self, userdata):
-        """Point, speak, look, init pose"""
-        target_name = GuidingAction.services_proxy["get_individual_info"]("getName",
-                                                                          userdata.landmark_to_point[LANDMARK_NAME])
-
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-
+    def should_rotate_to_act(self, point_stamped):
         can_look_at = GuidingAction.services_proxy["can_look_at"](point_stamped).success
         can_point_at = GuidingAction.services_proxy["can_point_at"](point_stamped).success
-
         if not can_look_at or not can_point_at:
             if not can_look_at:
                 rospy.logwarn("cannot look")
             if not can_point_at:
                 rospy.logwarn("cannot point")
+            return True
+
+    def execute(self, userdata):
+        """Point, speak, look, init pose"""
+
+        point_stamped = PointStamped()
+        point_stamped.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
+
+        if self.should_rotate_to_act(point_stamped):
             GuidingAction.sm_test_rotation.userdata.route = userdata.route
             GuidingAction.sm_test_rotation.userdata.goal_frame = userdata.goal_frame
             GuidingAction.sm_test_rotation.userdata.person_frame = userdata.person_frame
@@ -2446,6 +2454,7 @@ class PointAndLookAtLandmark(smach.State):
         coord_signal.expiration = rospy.Time() + rospy.Duration(1)
         # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.landmark_to_point[LANDMARK_NAME] + "\)"
         # coord_signal.predicate = "isWaiting(robot," + userdata.landmark_to_point[LANDMARK_NAME] + ")"
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         point_stamped = PointStamped()
         point_stamped.header.frame_id = userdata.person_frame
@@ -2469,6 +2478,7 @@ class PointAndLookAtLandmark(smach.State):
         coord_signal.expiration = rospy.Time() + rospy.Duration(1)
         # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
         coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         point_at_request = PointAtRequest()
         point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
@@ -2577,6 +2587,7 @@ class LookAtHuman(smach.State):
         coord_signal.expiration = rospy.Time() + rospy.Duration(0, 1)
         # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
         coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
