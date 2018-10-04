@@ -1243,37 +1243,39 @@ class ShouldCallPointingConfig(smach.State):
             return 'succeeded'
 
 
-def define_svp_planner_lm(goal, direction):
-    goal_lm = ""
+class SVPPlannerClient(smach_ros.SimpleActionState):
 
-    direction_lm = direction
+    def define_svp_planner_lm(self, goal, direction):
+        goal_lm = ""
 
-    # Check if it exists an associated mesh to the goal
-    has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, goal)
-    if not has_mesh_result.success:
-        rospy.logerr("has_mesh service failed")
-    else:
-        # if there is no mesh, the target_frame remains empty
-        if has_mesh_result.has_mesh:
-            goal_lm = goal
+        direction_lm = direction
+
+        # Check if it exists an associated mesh to the goal
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, goal)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
         else:
-            rospy.logwarn("goal frame has no mesh")
-            goal_lm = direction_lm
-            direction_lm = ""
+            # if there is no mesh, the target_frame remains empty
+            if has_mesh_result.has_mesh:
+                goal_lm = goal
+            else:
+                rospy.logwarn("goal frame has no mesh")
+                goal_lm = direction_lm
+                direction_lm = ""
 
-    # Check if it exists an associated mesh to the direction
-    has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, direction)
-    if not has_mesh_result.success:
-        rospy.logerr("has_mesh service failed")
-    else:
-        if not has_mesh_result.has_mesh:
-            rospy.logwarn("direction has no mesh")
-            direction_lm = ""
+        # Check if it exists an associated mesh to the direction
+        has_mesh_result = GuidingAction.services_proxy["has_mesh"](WORLD, direction)
+        if not has_mesh_result.success:
+            rospy.logerr("has_mesh service failed")
+        else:
+            if not has_mesh_result.has_mesh:
+                rospy.logwarn("direction has no mesh")
+                direction_lm = ""
 
-    return {'goal': goal_lm, 'direction': direction_lm}
+        return {'goal': goal_lm, 'direction': direction_lm}
 
 
-class PointingConfig(smach_ros.SimpleActionState):
+class PointingConfig(SVPPlannerClient):
     """Calls the pointing planner to get the best configuration (pose) for the human and the robot
 
     It extracts the first passage from the route returned by the route planner (route[1])
@@ -1341,7 +1343,7 @@ class PointingConfig(smach_ros.SimpleActionState):
             userdata.second_pointing_config = True
             PointingConfig.has_been_in_state = False
 
-        landmarks = define_svp_planner_lm(userdata.goal_frame, userdata.direction)
+        landmarks = self.define_svp_planner_lm(userdata.goal_frame, userdata.direction)
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
@@ -1378,7 +1380,7 @@ class PointingConfig(smach_ros.SimpleActionState):
             return 'aborted'
 
 
-class PointingConfigForRobot(smach_ros.SimpleActionState):
+class PointingConfigForRobot(SVPPlannerClient):
     def __init__(self):
         """Constructor for PointingConfig state
 
@@ -1404,7 +1406,7 @@ class PointingConfigForRobot(smach_ros.SimpleActionState):
         rospy.set_param('/pointing_planner/settings/mobhum', 0.0)
         rospy.set_param('/pointing_planner/settings/mobrob', 1.0)
 
-        landmarks = define_svp_planner_lm(userdata.goal_frame, userdata.direction)
+        landmarks = self.define_svp_planner_lm(userdata.goal_frame, userdata.direction)
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
@@ -2018,7 +2020,7 @@ class MoveToPose(smach_ros.SimpleActionState):
             return 'aborted'
 
 
-class GetRotationAngle(smach_ros.SimpleActionState):
+class GetRotationAngle(SVPPlannerClient):
     def __init__(self):
         """Constructor for PointingConfig state
 
@@ -2046,7 +2048,7 @@ class GetRotationAngle(smach_ros.SimpleActionState):
         rospy.set_param('/pointing_planner/settings/mobrob', 0.0)
         rospy.set_param('/pointing_planner/settings/mobhum', 0.0)
 
-        landmarks = define_svp_planner_lm(userdata.goal_frame, userdata.direction)
+        landmarks = self.define_svp_planner_lm(userdata.goal_frame, userdata.direction)
 
         pointing_planner_goal = PointingGoal()
         pointing_planner_goal.human = userdata.person_frame
@@ -2114,19 +2116,17 @@ class RotateRobot(smach_ros.SimpleActionState):
             rotate_goal.rotation = angle
         else:
             rotate_goal.rotation = userdata.rotation
+            # if svp planner did not return a solution to the rotation
             if userdata.rotation.header.frame_id == "":
                 point_stamped = PointStamped()
                 point_stamped.header.frame_id = userdata.goal_frame
 
                 can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
-                rospy.logwarn(can_point_at_resp)
                 angle = QuaternionStamped()
                 angle.header.frame_id = 'base_footprint'
                 angle.quaternion.x, angle.quaternion.y, angle.quaternion.z, angle.quaternion.w = \
                     transform.quaternion_from_euler(0, 0, can_point_at_resp.angle)
                 rotate_goal.rotation = angle
-        rospy.logwarn("quaternion for rotation:")
-        rospy.logwarn(rotate_goal.rotation)
         return rotate_goal
 
     def rotate_feedback_cb(self, userdata, feedback):
@@ -2222,7 +2222,110 @@ class SelectLandmark(smach.State):
                 return 'point_not_visible'
 
 
-class PointNotVisible(smach.State):
+class Gesture(smach.State):
+
+    def send_coordination_signal(self, frame, duration, priority=100, end_condition="", predicate=""):
+        coord_signal = CoordinationSignal()
+        coord_signal.header.frame_id = frame
+        target = TargetWithExpiration()
+        target.target.header.frame_id = frame
+        target.duration = duration
+        coord_signal.targets.append(target)
+        coord_signal.priority = priority
+        coord_signal.expiration = rospy.Time() + duration
+        if end_condition != "":
+            coord_signal.regex_end_condition = end_condition
+        if predicate != "":
+            coord_signal.predicate = predicate
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
+
+    def call_can_point_at(self, frame):
+        point_stamped = PointStamped()
+        point_stamped.header.frame_id = frame
+        can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
+        return can_point_at_resp
+
+    def call_can_look_at(self, frame):
+        point_stamped = PointStamped()
+        point_stamped.header.frame_id = frame
+        can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
+        return can_look_at_resp
+
+    def point_at(self, frame):
+        point_at_request = PointAtRequest()
+        point_at_request.point.header.frame_id = frame
+        point_at_resp = GuidingAction.services_proxy["point_at"](point_at_request)
+        return point_at_resp.success
+
+
+class Pointing(Gesture):
+    def should_rotate_to_act(self, frame):
+        can_point_at = self.call_can_point_at(frame).success
+        can_look_at = self.call_can_look_at(frame).success
+        if not can_look_at or not can_point_at:
+            if not can_look_at:
+                rospy.logwarn("cannot look")
+            if not can_point_at:
+                rospy.logwarn("cannot point")
+            return True
+
+    def execute_rotation_try_svp_angle(self, userdata):
+        GuidingAction.sm_test_rotation.userdata.route = userdata.route
+        GuidingAction.sm_test_rotation.userdata.goal_frame = userdata.goal_frame
+        GuidingAction.sm_test_rotation.userdata.person_frame = userdata.person_frame
+        GuidingAction.sm_test_rotation.userdata.human_look_at_point = userdata.human_look_at_point
+        GuidingAction.sm_test_rotation.userdata.direction = userdata.direction
+        GuidingAction.sm_test_rotation.set_initial_state(['GetRotationAngle'])
+        GuidingAction.sm_test_rotation.execute()
+
+    def execute_rotation_deic_gest(self, angle):
+        GuidingAction.sm_test_rotation.userdata.rotation = angle
+        GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
+        GuidingAction.sm_test_rotation.execute()
+
+    def select_speech_case(self, landmark_to_point_type, route):
+        case = 0
+        # if the direction does not exist (target in same area)
+        if landmark_to_point_type == LANDMARK_TYPE_TARGET and \
+                len(route) == NO_INTERFACE_LEN:
+            case = 0
+        # if both exists (target in a different area)
+        elif landmark_to_point_type == LANDMARK_TYPE_TARGET:
+            case = 1
+        # point the direction if it exists, no matter the existence of the target
+        elif landmark_to_point_type == LANDMARK_TYPE_DIRECTION:
+            case = 2
+
+        return case
+
+    def speech(self, case, visible, userdata):
+        if HWU_DIAL:
+            if case == 0 or case == 2:
+                route_description = GuidingAction.services_proxy["get_route_description"](
+                    userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
+                GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
+                                                                json.dumps(route_description))
+            elif case == 1:
+                GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
+                                                                json.dumps([userdata.landmark_to_point[
+                                                                                LANDMARK_NAME], case]))
+        else:
+            if case == 0 or case == 2:
+                route_description = GuidingAction.services_proxy["get_route_description"](
+                    userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
+                GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
+                                                    SPEECH_PRIORITY)
+                rospy.logwarn(route_description)
+            elif case == 1:
+                if visible:
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Look, it's there",
+                                                        SPEECH_PRIORITY)
+                else:
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "It's in this direction",
+                                                        SPEECH_PRIORITY)
+
+
+class PointNotVisible(Pointing):
     """Check if the not visible landmark to point has a tf frame. If so, it will point at its direction.
 
     If not, it will announces to the human that it will show the passage (direction - pointing planner vocab) to take
@@ -2269,11 +2372,6 @@ class PointNotVisible(smach.State):
 
         # if the landmark has a tf frame
         if self._tfBuffer.can_transform('map', userdata.landmark_to_point[LANDMARK_NAME], rospy.Time(0)):
-            # if it exists a verbalized name in the ontology
-            if target_name.code == 0:
-                target_name_value = target_name.values[0]
-            else:
-                target_name_value = userdata.landmark_to_point[LANDMARK_NAME]
 
             # if HWU_DIAL:
             #     if "signpost" in get_up:
@@ -2298,94 +2396,22 @@ class PointNotVisible(smach.State):
             #     except rospy.ServiceException, e:
             #         rospy.logerr("speech exception")
 
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
+            can_point_at_resp = self.call_can_point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
-            can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
             if not can_point_at_resp.success:
-                rospy.logwarn("cannot point")
+                rospy.logwarn("try to rotate because cannot point")
+                self.execute_rotation_deic_gest(can_point_at_resp.angle)
 
-                GuidingAction.sm_test_rotation.userdata.rotation = can_point_at_resp.angle
-                GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
-                GuidingAction.sm_test_rotation.execute()
+            point_at_success = self.point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
-            point_at_request = PointAtRequest()
-            point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-            point_at = GuidingAction.services_proxy["point_at"](point_at_request)
+            case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route)
 
-            route = userdata.route
-            if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-                route = route[0:DIRECTION_INDEX+1]
-
-            case = 0
-            # if the direction does not exist (target in same area)
-            if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET and len(
-                    userdata.route) == NO_INTERFACE_LEN:
-                case = 0
-            # if both exists (target in a different area)
-            elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
-                case = 1
-            # point the direction if it exists, no matter the existence of the target
-            elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-                case = 2
-
-            if HWU_DIAL:
-                if case == 0 or case == 2:
-                    route_description = GuidingAction.services_proxy["get_route_description"](
-                        userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
-                    GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
-                                                                    json.dumps(route_description))
-                elif case == 1:
-                    GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
-                                                                    json.dumps([userdata.landmark_to_point[
-                                                                                    LANDMARK_NAME], case]))
-            else:
-                if case == 0 or case == 2:
-                    route_description = GuidingAction.services_proxy["get_route_description"](
-                        userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
-                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
-                                                        SPEECH_PRIORITY)
-                    rospy.logwarn(route_description)
-                elif case == 1:
-                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "It's in this direction",
-                                                        SPEECH_PRIORITY)
+            self.speech(case, False, userdata)
 
             rospy.sleep(POINTING_DURATION)
             GuidingAction.services_proxy["rest_arm"]("Arms")
 
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = userdata.person_frame
-
-            can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
-
-            if not can_look_at_resp.success:
-                rospy.logwarn("cannot look")
-
-                GuidingAction.sm_test_rotation.userdata.rotation = can_look_at_resp.angle
-                GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
-                GuidingAction.sm_test_rotation.execute()
-
-            coord_signal = CoordinationSignal()
-            coord_signal.header.frame_id = userdata.person_frame
-            target = TargetWithExpiration()
-            target.target.header.frame_id = userdata.person_frame
-            target.duration = rospy.Duration(2)
-            coord_signal.targets.append(target)
-            coord_signal.priority = 100
-            coord_signal.expiration = rospy.Time() + rospy.Duration(2)
-            # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
-            coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
-            GuidingAction.coord_signals_publisher.publish(coord_signal)
-
-            # TODO: mettre a la fin
-            # if HWU_DIAL:
-            #     GuidingAction.action_server.update_kb(status="verbalisation.location_direction",
-            #                                                   return_value=target_name_value)
-            # else:
-            #     GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-            #                                         "Can I do something else for you ?",
-            #                                         SPEECH_PRIORITY)
-            if point_at.success:
+            if point_at_success:
                 return 'succeeded'
             else:
                 return 'aborted'
@@ -2394,7 +2420,7 @@ class PointNotVisible(smach.State):
             return 'succeeded'
 
 
-class PointAndLookAtLandmark(smach.State):
+class PointAndLookAtLandmark(Pointing):
     """First, points at the landmark, says to the human the landmark is there (different speech
     according to the different cases - same area or not for the target, or direction), then looks at the landmark and
     finally goes back to init pose.
@@ -2419,70 +2445,15 @@ class PointAndLookAtLandmark(smach.State):
     def get_name(self):
         return self.__class__.__name__
 
-    def should_rotate_to_act(self, point_stamped):
-        can_look_at = GuidingAction.services_proxy["can_look_at"](point_stamped).success
-        can_point_at = GuidingAction.services_proxy["can_point_at"](point_stamped).success
-        if not can_look_at or not can_point_at:
-            if not can_look_at:
-                rospy.logwarn("cannot look")
-            if not can_point_at:
-                rospy.logwarn("cannot point")
-            return True
-
     def execute(self, userdata):
         """Point, speak, look, init pose"""
 
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
+        if self.should_rotate_to_act(userdata.landmark_to_point[LANDMARK_NAME]):
+            self.execute_rotation_try_svp_angle(userdata)
 
-        if self.should_rotate_to_act(point_stamped):
-            GuidingAction.sm_test_rotation.userdata.route = userdata.route
-            GuidingAction.sm_test_rotation.userdata.goal_frame = userdata.goal_frame
-            GuidingAction.sm_test_rotation.userdata.person_frame = userdata.person_frame
-            GuidingAction.sm_test_rotation.userdata.human_look_at_point = userdata.human_look_at_point
-            GuidingAction.sm_test_rotation.userdata.direction = userdata.direction
-            GuidingAction.sm_test_rotation.set_initial_state(['GetRotationAngle'])
-            GuidingAction.sm_test_rotation.execute()
+        self.send_coordination_signal(userdata.landmark_to_point[LANDMARK_NAME], rospy.Duration(1))
 
-        coord_signal = CoordinationSignal()
-        coord_signal.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-        target = TargetWithExpiration()
-        target.target.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-        target.duration = rospy.Duration(1)
-        coord_signal.targets.append(target)
-        coord_signal.priority = 100
-        coord_signal.expiration = rospy.Time() + rospy.Duration(1)
-        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.landmark_to_point[LANDMARK_NAME] + "\)"
-        # coord_signal.predicate = "isWaiting(robot," + userdata.landmark_to_point[LANDMARK_NAME] + ")"
-        GuidingAction.coord_signals_publisher.publish(coord_signal)
-
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = userdata.person_frame
-
-        can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
-
-        if not can_point_at_resp.success:
-            rospy.logwarn("cannot point")
-
-            GuidingAction.sm_test_rotation.userdata.rotation = can_point_at_resp.angle
-            GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
-            GuidingAction.sm_test_rotation.execute()
-
-        coord_signal = CoordinationSignal()
-        coord_signal.header.frame_id = userdata.person_frame
-        target = TargetWithExpiration()
-        target.target.header.frame_id = userdata.person_frame
-        target.duration = rospy.Duration(1)
-        coord_signal.targets.append(target)
-        coord_signal.priority = 100
-        coord_signal.expiration = rospy.Time() + rospy.Duration(1)
-        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
-        coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
-        GuidingAction.coord_signals_publisher.publish(coord_signal)
-
-        point_at_request = PointAtRequest()
-        point_at_request.point.header.frame_id = userdata.landmark_to_point[LANDMARK_NAME]
-        point_at = GuidingAction.services_proxy["point_at"](point_at_request)
+        point_at_success = self.point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
         # route = userdata.route
         # if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
@@ -2494,37 +2465,9 @@ class PointAndLookAtLandmark(smach.State):
         #         route = route[0:DIRECTION_INDEX+1]
         #     rospy.logwarn("route to direction %s", route)
 
-        case = 0
-        # if the direction does not exist (target in same area)
-        if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET and len(userdata.route) == NO_INTERFACE_LEN:
-            case = 0
-        # if both exists (target in a different area)
-        elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_TARGET:
-            case = 1
-        # point the direction if it exists, no matter the existence of the target
-        elif userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-            case = 2
+        case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route)
 
-        if HWU_DIAL:
-            if case == 0 or case == 2:
-                route_description = GuidingAction.services_proxy["get_route_description"](
-                    userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
-                GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
-                                                                json.dumps(route_description))
-            elif case == 1:
-                GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
-                                                                json.dumps([userdata.landmark_to_point[
-                                                                                LANDMARK_NAME], case]))
-        else:
-            if case == 0 or case == 2:
-                route_description = GuidingAction.services_proxy["get_route_description"](
-                    userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
-                GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
-                                                    SPEECH_PRIORITY)
-                rospy.logwarn(route_description)
-            elif case == 1:
-                GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Look, it's there",
-                                                    SPEECH_PRIORITY)
+        self.speech(case, True, userdata)
 
         rospy.sleep(POINTING_DURATION)
 
@@ -2535,14 +2478,14 @@ class PointAndLookAtLandmark(smach.State):
             self.service_preempt()
             return 'preempted'
 
-        if point_at.success:
+        if point_at_success:
             return 'succeeded'
         else:
             rospy.logwarn("point at success false")
             return 'aborted'
 
 
-class LookAtHuman(smach.State):
+class LookAtHuman(Gesture):
     """Look at the human
 
     There are 3 possible outcomes:
@@ -2565,29 +2508,15 @@ class LookAtHuman(smach.State):
 
     def execute(self, userdata):
         """Looks at the human"""
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = userdata.person_frame
 
-        can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
-
+        can_look_at_resp = self.call_can_look_at(userdata.person_frame)
         if not can_look_at_resp.success:
             rospy.logwarn("cannot look")
-
             GuidingAction.sm_test_rotation.userdata.rotation = can_look_at_resp.angle
             GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
             GuidingAction.sm_test_rotation.execute()
 
-        coord_signal = CoordinationSignal()
-        coord_signal.header.frame_id = userdata.person_frame
-        target = TargetWithExpiration()
-        target.target.header.frame_id = userdata.person_frame
-        target.duration = rospy.Duration(0, 1)
-        coord_signal.targets.append(target)
-        coord_signal.priority = 100
-        coord_signal.expiration = rospy.Time() + rospy.Duration(0, 1)
-        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.person_frame + "\)"
-        coord_signal.predicate = "isWaiting(robot," + userdata.person_frame + ")"
-        GuidingAction.coord_signals_publisher.publish(coord_signal)
+        self.send_coordination_signal(userdata.person_frame, rospy.Duration(0, 1))
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
