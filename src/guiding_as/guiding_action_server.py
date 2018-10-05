@@ -104,8 +104,7 @@ class GuidingAction(object):
         self.dialogue_inform_srv = ""
         self.dialogue_query_srv = ""
 
-        global HUMAN_FOLLOW
-        HUMAN_FOLLOW = rospy.get_param('/guiding/tuning_param/human_follow')
+        self.get_params()
 
         GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
                                                                    execute_cb=self.execute_cb,
@@ -150,7 +149,7 @@ class GuidingAction(object):
                                           input_keys=['target_frame', 'person_frame', 'human_look_at_point',
                                                       'route', 'goal_frame', 'persona', 'direction',
                                                       'last_state', 'last_outcome', 'landmarks_to_point',
-                                                      'route_2_shop_w_sign'],
+                                                      'route_2_shop_wo_sign', 'signpost'],
                                           output_keys=['last_state', 'last_outcome', 'person_frame'])
 
         self.check_landmark_seen_sm = smach.StateMachine(outcomes=['yes', 'no', 'pointing', 'preempted', 'failure'],
@@ -200,6 +199,32 @@ class GuidingAction(object):
         self.find_alternate_id_srv = rospy.get_param('/guiding/services/find_alternate_id')
         self.dialogue_inform_srv = rospy.get_param('guiding/services/dialogue_inform')
         self.dialogue_query_srv = rospy.get_param('guiding/services/dialogue_query')
+
+    def get_params(self):
+        global HUMAN_FOLLOW
+        HUMAN_FOLLOW = rospy.get_param('/guiding/tuning_param/human_follow')
+        global ROBOT_PLACE
+        ROBOT_PLACE = rospy.get_param('/guiding/perspective/robot_place')
+        global WORLD
+        WORLD = rospy.get_param('/guiding/perspective/world')
+        global POINTING_DURATION
+        POINTING_DURATION = rospy.get_param('/guiding/tuning_param/pointing_duration')
+        global STOP_TRACK_DIST_TH
+        STOP_TRACK_DIST_TH = rospy.get_param('/guiding/tuning_param/stop_tracking_dist_th')
+        global SIGNPOST
+        SIGNPOST = rospy.get_param('/guiding/tuning_param/signpost')
+        global HUMAN_SHOULD_MOVE_DIST_TH
+        HUMAN_SHOULD_MOVE_DIST_TH = rospy.get_param('/guiding/tuning_param/human_should_move_dist_th')
+        global ROBOT_SHOULD_MOVE_DIST_TH
+        ROBOT_SHOULD_MOVE_DIST_TH = rospy.get_param('/guiding/tuning_param/robot_should_move_dist_th')
+        global TAKE_ROBOT_PLACE_DIST_TH
+        TAKE_ROBOT_PLACE_DIST_TH = rospy.get_param('/guiding/tuning_param/take_robot_place_dist_th')
+        global LOST_PERCEPTION_TIMEOUT
+        LOST_PERCEPTION_TIMEOUT = rospy.get_param('/guiding/tuning_param/lost_perception_timeout')
+        global OBSERVE_LANDMARK_TIMEOUT
+        OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/guiding/tuning_param/observe_landmark_timeout')
+        global HWU_DIAL
+        HWU_DIAL = rospy.get_param('/guiding/dialogue/hwu')
 
     def wait_for_services(self):
 
@@ -753,29 +778,6 @@ class GuidingAction(object):
         - last_state: Last active state the machine was in
         """
 
-        global ROBOT_PLACE
-        ROBOT_PLACE = rospy.get_param('/guiding/perspective/robot_place')
-        global WORLD
-        WORLD = rospy.get_param('/guiding/perspective/world')
-        global POINTING_DURATION
-        POINTING_DURATION = rospy.get_param('/guiding/tuning_param/pointing_duration')
-        global STOP_TRACK_DIST_TH
-        STOP_TRACK_DIST_TH = rospy.get_param('/guiding/tuning_param/stop_tracking_dist_th')
-        global SIGNPOST
-        SIGNPOST = rospy.get_param('/guiding/tuning_param/signpost')
-        global HUMAN_SHOULD_MOVE_DIST_TH
-        HUMAN_SHOULD_MOVE_DIST_TH = rospy.get_param('/guiding/tuning_param/human_should_move_dist_th')
-        global ROBOT_SHOULD_MOVE_DIST_TH
-        ROBOT_SHOULD_MOVE_DIST_TH = rospy.get_param('/guiding/tuning_param/robot_should_move_dist_th')
-        global TAKE_ROBOT_PLACE_DIST_TH
-        TAKE_ROBOT_PLACE_DIST_TH = rospy.get_param('/guiding/tuning_param/take_robot_place_dist_th')
-        global LOST_PERCEPTION_TIMEOUT
-        LOST_PERCEPTION_TIMEOUT = rospy.get_param('/guiding/tuning_param/lost_perception_timeout')
-        global OBSERVE_LANDMARK_TIMEOUT
-        OBSERVE_LANDMARK_TIMEOUT = rospy.get_param('/guiding/tuning_param/observe_landmark_timeout')
-        global HWU_DIAL
-        HWU_DIAL = rospy.get_param('/guiding/dialogue/hwu')
-
         start_waiting_goal = False
         if len(self.waiting_goals) != 0:
             for i in self.waiting_goals:
@@ -911,10 +913,9 @@ class GetRouteRegion(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['in_region', 'out_region', 'unknown', 'preempted', 'aborted'],
-                             input_keys=['target_frame', 'human_look_at_point', 'persona', 'route_2_shop_w_sign'],
+                             input_keys=['target_frame', 'human_look_at_point', 'persona', 'route_2_shop_wo_sign'],
                              io_keys=['route'],
-                             output_keys=['stairs', 'goal_frame', 'target_out_region', 'direction',
-                                          'route_2_shop_w_sign'])
+                             output_keys=['stairs', 'goal_frame', 'direction', 'route_2_shop_wo_sign', 'signpost'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -979,6 +980,25 @@ class GetRouteRegion(smach.State):
 
             userdata.goal_frame = select_best_route_result['goal']
 
+            get_up = GuidingAction.services_proxy["get_individual_info"]("getUp", select_best_route_result['goal'])
+
+            rospy.logwarn(get_up)
+
+            if "signpost" in get_up.values:
+                userdata.signpost = True
+                # test if place in region
+                get_route = GuidingAction.services_proxy["get_route"](
+                    ROBOT_PLACE,
+                    userdata.target_frame,
+                    userdata.persona,
+                    False,
+                    None)
+                select_best_route_result = self.select_best_route(get_route.routes, get_route.costs, get_route.goals)
+                userdata.route_2_shop_wo_sign = select_best_route_result['route'].route
+            else:
+                userdata.route_2_shop_wo_sign = select_best_route_result['route'].route
+                userdata.signpost = False
+
         else:
             userdata.route = []
 
@@ -987,27 +1007,16 @@ class GetRouteRegion(smach.State):
         else:
             userdata.stairs = False
 
-        userdata.target_out_region = True
         # if the routes list returned by the route planner is empty, problem with target or robot place
         if len(userdata.route) == 0:
             return 'unknown'
         else:
-            # test if place in region
-            get_route = GuidingAction.services_proxy["get_route"](
-                ROBOT_PLACE,
-                userdata.target_frame,
-                userdata.persona,
-                False,
-                None)
-            select_best_route_result = self.select_best_route(get_route.routes, get_route.costs, get_route.goals)
-            userdata.route_2_shop_w_sign = select_best_route_result['route'].route
 
-            if len(userdata.route_2_shop_w_sign) == NO_INTERFACE_LEN:
-                userdata.target_out_region = False
+            if len(userdata.route_2_shop_wo_sign) == NO_INTERFACE_LEN:
                 userdata.direction = ""
                 return 'in_region'
             else:
-                userdata.direction = userdata.route_2_shop_w_sign[DIRECTION_INDEX]
+                userdata.direction = userdata.route_2_shop_wo_sign[DIRECTION_INDEX]
                 return 'out_region'
 
 
@@ -1034,7 +1043,7 @@ class AskShowPlace(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['get_answer', 'show', 'not_show', 'preempted'],
-                             input_keys=['goal_frame', 'human_look_at_point', 'target_out_region'],
+                             input_keys=['goal_frame', 'human_look_at_point'],
                              output_keys=['question_asked'])
 
     def get_name(self):
@@ -1059,29 +1068,19 @@ class AskShowPlace(smach.State):
             target_name_value = userdata.goal_frame
 
         if HWU_DIAL:
-            if not userdata.target_out_region:
-                # say : {value} + "is nearby. Would you like me to guide you ?"
-                answer = GuidingAction.services_proxy["dialogue_query"]("clarification.route_same_region",
-                                                                        json.dumps(target_name_value))
-            # else:
-            #     answer = GuidingAction.action_server.query_kb(status="clarification.route_same_region",
-            #                                                   return_value=json.dumps(target_name_value))
-                if answer.result == 'true':
-                    return 'show'
-                else:
-                    return 'not_show'
+
+            # say : {value} + "is nearby. Would you like me to guide you ?"
+            answer = GuidingAction.services_proxy["dialogue_query"]("clarification.route_same_region",
+                                                                    json.dumps(target_name_value))
+            if answer.result == 'true':
+                return 'show'
+            else:
+                return 'not_show'
         else:
-            if not userdata.target_out_region:
-                GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                    target_name_value +
-                                                    " is nearby. Would you like me to show you the place ?",
-                                                    SPEECH_PRIORITY)
-            # else:
-            #     GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-            #                                         target_name_value +
-            #                                         " is not here but I can indicate you the sign to follow to get "
-            #                                         "there. Would you like it ?",
-            #                                         SPEECH_PRIORITY)
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                target_name_value +
+                                                " is nearby. Would you like me to show you the place ?",
+                                                SPEECH_PRIORITY)
             userdata.question_asked = 'ask_show_target'
             return 'get_answer'
 
@@ -1291,7 +1290,7 @@ class PointingConfig(SVPPlannerClient):
         return self.__class__.__name__
 
     def pointing_config_goal_cb(self, userdata, goal):
-        rospy.set_param('/pointing_planner/try_no_move', False)
+        rospy.set_param('/pointing_planner/try_no_move', rospy.get_param('/guiding/tuning_param/try_no_move'))
         rospy.set_param('/pointing_planner/settings/mobrob', 1.0)
         rospy.set_param('/pointing_planner/settings/mobhum', 1.0)
 
@@ -2205,6 +2204,12 @@ class Gesture(smach.State):
 
 
 class Pointing(Gesture):
+
+    TARGET_SAME_AREA = 0
+    TARGET_DIFF_AREA_NO_SIGN = 1
+    TARGET_DIFF_AREA_W_SIGN = 2
+    DIRECTION = 3
+
     def should_rotate_to_act(self, frame):
         can_point_at = self.call_can_point_at(frame).success
         can_look_at = self.call_can_look_at(frame).success
@@ -2229,45 +2234,56 @@ class Pointing(Gesture):
         GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
         GuidingAction.sm_test_rotation.execute()
 
-    def select_speech_case(self, landmark_to_point_type, route):
-        case = 0
+    def select_speech_case(self, landmark_to_point_type, route, signpost):
+        case = Pointing.TARGET_SAME_AREA
         # if the direction does not exist (target in same area)
         if landmark_to_point_type == LANDMARK_TYPE_TARGET and \
                 len(route) == NO_INTERFACE_LEN:
-            case = 0
+            case = Pointing.TARGET_SAME_AREA
         # if both exists (target in a different area)
         elif landmark_to_point_type == LANDMARK_TYPE_TARGET:
-            case = 1
+            if not signpost:
+                case = Pointing.TARGET_DIFF_AREA_NO_SIGN
+            else:
+                case = Pointing.TARGET_DIFF_AREA_W_SIGN
         # point the direction if it exists, no matter the existence of the target
         elif landmark_to_point_type == LANDMARK_TYPE_DIRECTION:
-            case = 2
+            case = Pointing.DIRECTION
 
         return case
 
     def speech(self, case, visible, userdata):
         if HWU_DIAL:
-            if case == 0 or case == 2:
+            if case == Pointing.TARGET_SAME_AREA or case == Pointing.DIRECTION:
                 route_description = GuidingAction.services_proxy["get_route_description"](
                     userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
                 GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
                                                                 json.dumps(route_description))
-            elif case == 1:
+            elif case == Pointing.TARGET_DIFF_AREA_NO_SIGN:
                 GuidingAction.services_proxy["dialogue_inform"]("verbalisation.location_show",
                                                                 json.dumps([userdata.landmark_to_point[
                                                                                 LANDMARK_NAME], case]))
         else:
-            if case == 0 or case == 2:
+            if case == Pointing.TARGET_SAME_AREA or case == case == Pointing.DIRECTION:
                 route_description = GuidingAction.services_proxy["get_route_description"](
-                    userdata.route, ROBOT_PLACE, userdata.goal_frame).region_route
+                    userdata.route_2_shop_wo_sign, ROBOT_PLACE, userdata.target_frame).region_route
                 GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
                                                     SPEECH_PRIORITY)
                 rospy.logwarn(route_description)
-            elif case == 1:
+            elif case == Pointing.TARGET_DIFF_AREA_NO_SIGN:
                 if visible:
                     GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Look, it's there",
                                                         SPEECH_PRIORITY)
                 else:
                     GuidingAction.services_proxy["say"](userdata.human_look_at_point, "It's in this direction",
+                                                        SPEECH_PRIORITY)
+            elif case == Pointing.TARGET_DIFF_AREA_W_SIGN:
+                if visible:
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "Follow the sign there",
+                                                        SPEECH_PRIORITY)
+                else:
+                    GuidingAction.services_proxy["say"](userdata.human_look_at_point, "The sign you should follow is in"
+                                                                                      "this direction",
                                                         SPEECH_PRIORITY)
 
 
@@ -2293,8 +2309,8 @@ class PointNotVisible(Pointing):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
-                             input_keys=['landmark_to_point', 'human_look_at_point', 'route', 'goal_frame',
-                                         'person_frame', 'persona'])
+                             input_keys=['landmark_to_point', 'human_look_at_point', 'route_2_shop_wo_sign',
+                                         'goal_frame', 'person_frame', 'persona', 'signpost'])
         self._tfBuffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tfBuffer)
 
@@ -2305,12 +2321,6 @@ class PointNotVisible(Pointing):
         """Performs the pointing in the landmark direction if it is possible, otherwise announces it will show the
         passage """
 
-        get_up = GuidingAction.services_proxy["get_individual_info"]("getUp",
-                                                                     userdata.landmark_to_point[LANDMARK_NAME]).values
-
-        target_name = GuidingAction.services_proxy["get_individual_info"]("getName",
-                                                                          userdata.landmark_to_point[LANDMARK_NAME])
-
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
             self.service_preempt()
@@ -2318,29 +2328,6 @@ class PointNotVisible(Pointing):
 
         # if the landmark has a tf frame
         if self._tfBuffer.can_transform('map', userdata.landmark_to_point[LANDMARK_NAME], rospy.Time(0)):
-
-            # if HWU_DIAL:
-            #     if "signpost" in get_up:
-            #         pass
-            #     else:
-            #         # say : {value}+"is nearby. It is not visible but it is in this direction."
-            #         GuidingAction.action_server.update_kb(status="verbalisation.location_direction",
-            #                                                       return_value=target_name_value)
-            # else:
-            #     try:
-            #         if "signpost" in get_up:
-            #             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-            #                                                 "It is not visible but you can find a sign indicating "
-            #                                                 + target_name_value + " in this direction",
-            #                                                 SPEECH_PRIORITY)
-            #         else:
-            #             pass
-            #             # GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-            #             #                                     target_name_value +
-            #             #                                     " is not visible",
-            #             #                                     SPEECH_PRIORITY)
-            #     except rospy.ServiceException, e:
-            #         rospy.logerr("speech exception")
 
             can_point_at_resp = self.call_can_point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
@@ -2350,7 +2337,8 @@ class PointNotVisible(Pointing):
 
             point_at_success = self.point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
-            case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route)
+            case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route_2_shop_wo_sign,
+                                           userdata.signpost)
 
             self.speech(case, False, userdata)
 
@@ -2386,7 +2374,7 @@ class PointAndLookAtLandmark(Pointing):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
                              input_keys=['person_frame', 'goal_frame', 'landmark_to_point', 'human_look_at_point',
-                                         'route', 'persona', 'route_2_shop_w_sign', 'direction'])
+                                         'route', 'persona', 'route_2_shop_wo_sign', 'direction', 'signpost'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -2401,17 +2389,8 @@ class PointAndLookAtLandmark(Pointing):
 
         point_at_success = self.point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
-        # route = userdata.route
-        # if userdata.landmark_to_point[LANDMARK_TYPE] == LANDMARK_TYPE_DIRECTION:
-        #     get_up = GuidingAction.services_proxy["get_individual_info"]("getUp",
-        #                                                                  userdata.goal_frame).values
-        #     if "signpost" in get_up:
-        #         route = userdata.route_2_shop_w_sign[0:DIRECTION_INDEX+1]
-        #     else:
-        #         route = route[0:DIRECTION_INDEX+1]
-        #     rospy.logwarn("route to direction %s", route)
-
-        case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route)
+        case = self.select_speech_case(userdata.landmark_to_point[LANDMARK_TYPE], userdata.route_2_shop_wo_sign,
+                                       userdata.signpost)
 
         self.speech(case, True, userdata)
 
