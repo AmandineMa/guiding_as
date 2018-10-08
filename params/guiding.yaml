@@ -11,7 +11,7 @@ guiding:
     say: /speech_wrapper/speak_to
     get_route_region: /semantic_route_description/get_route_region
     get_route: /semantic_route_description/get_route
-    get_route_description: /route_verbalization/verbalizePlace
+    route_verbalization: /route_verbalization/verbalizePlace
     get_individual_info: /ontologenius/individual
     get_pointing_config: /pointing_planner/plan
     is_visible: /pointing_planner/visibility_score
@@ -44,9 +44,9 @@ guiding:
     pointing_planner: pointing_planner/PointingPlanner
 
   tuning_param:
-    pointing_duration: 2.5 #seconds
+    pointing_duration: 1 #seconds
     stop_tracking_dist_th: 0.3 #meters
-    human_should_move_dist_th: 0.5 #meters
+    human_should_move_dist_th: 0.3 #meters
     robot_should_move_dist_th: 0.5 #meters
     take_robot_place_dist_th: 0.6 #meters
     lost_perception_timeout: 10 #seconds

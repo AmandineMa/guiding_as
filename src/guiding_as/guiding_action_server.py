@@ -88,7 +88,7 @@ class GuidingAction(object):
         self.say_srv = ""
         # get_route_region_srv = ""
         self.get_route_srv = ""
-        self.get_route_description_srv = ""
+        self.route_verbalization_srv = ""
         self.get_individual_info_srv = ""
         self.is_visible_srv = ""
         self.can_look_at_srv = ""
@@ -104,8 +104,6 @@ class GuidingAction(object):
         self.dialogue_inform_srv = ""
         self.dialogue_query_srv = ""
 
-        self.get_params()
-
         GuidingAction.action_server = actionlib.SimpleActionServer(self._action_name, taskAction,
                                                                    execute_cb=self.execute_cb,
                                                                    auto_start=False)
@@ -114,13 +112,13 @@ class GuidingAction(object):
         GuidingAction.action_server.register_preempt_callback(self.preempt_cb)
 
         self.get_service_names()
-        self.wait_for_services()
+        self.wait_for_services_and_as()
 
         GuidingAction.services_proxy = {
             "stand_pose": ServiceWrapper(self.stand_pose_srv, GoToPosture),
             "say": rospy.ServiceProxy(self.say_srv, SpeakTo),
             "get_route": ServiceWrapper(self.get_route_srv, SemanticRoute),
-            "get_route_description": ServiceWrapper(self.get_route_description_srv, VerbalizeRegionRoute),
+            "route_verbalization": ServiceWrapper(self.route_verbalization_srv, VerbalizeRegionRoute),
             "is_visible": ServiceWrapper(self.is_visible_srv, VisibilityScore),
             "has_mesh": ServiceWrapper(self.has_mesh_srv, HasMesh),
             "get_individual_info": ServiceWrapper(self.get_individual_info_srv, OntologeniusService),
@@ -155,6 +153,7 @@ class GuidingAction(object):
         self.check_landmark_seen_sm = smach.StateMachine(outcomes=['yes', 'no', 'pointing', 'preempted', 'failure'],
                                                          input_keys=['human_look_at_point', 'last_state',
                                                          'person_frame', 'last_outcome'])
+
         self.top_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'])
 
         self.build_state_machines()
@@ -164,7 +163,8 @@ class GuidingAction(object):
         # temporary here
         GuidingAction.sm_test_rotation = smach.StateMachine(outcomes=['succeeded', 'preempted', 'aborted'])
         with GuidingAction.sm_test_rotation:
-            smach.StateMachine.add('GetRotationAngle', GetRotationAngle(), transitions={'succeeded': 'Rotate'})
+            smach.StateMachine.add('GetRotationAngle', GetRotationAngle(), transitions={'succeeded': 'Rotate',
+                                                                                        'aborted': 'Rotate'})
             smach.StateMachine.add('Rotate', RotateRobot())
         # --- #
 
@@ -184,7 +184,7 @@ class GuidingAction(object):
         self.stand_pose_srv = rospy.get_param('/guiding/services/stand_pose')
         self.say_srv = rospy.get_param('/guiding/services/say')
         self.get_route_srv = rospy.get_param('/guiding/services/get_route')
-        self.get_route_description_srv = rospy.get_param('/guiding/services/get_route_description')
+        self.route_verbalization_srv = rospy.get_param('/guiding/services/route_verbalization')
         self.get_individual_info_srv = rospy.get_param('/guiding/services/get_individual_info')
         self.is_visible_srv = rospy.get_param('/guiding/services/is_visible')
         self.can_look_at_srv = rospy.get_param('/guiding/services/can_look_at')
@@ -226,15 +226,15 @@ class GuidingAction(object):
         global HWU_DIAL
         HWU_DIAL = rospy.get_param('/guiding/dialogue/hwu')
 
-    def wait_for_services(self):
+    def wait_for_services_and_as(self):
 
-        rospy.loginfo("waiting for services")
+        rospy.loginfo("waiting for action servers and services")
 
         services_status = {
             self.stand_pose_srv: False,
             self.say_srv: False,
             self.get_route_srv: False,
-            self.get_route_description_srv: False,
+            self.route_verbalization_srv: False,
             self.get_individual_info_srv: False,
             self.is_visible_srv: False,
             self.can_look_at_srv: False,
@@ -248,17 +248,32 @@ class GuidingAction(object):
             self.end_fact_srv: False,
             self.find_alternate_id_srv: False}
 
+        clients = {
+            "move_to": actionlib.SimpleActionClient(rospy.get_param("/guiding/action_servers/move_to"), MoveBaseAction),
+            "rotate": actionlib.SimpleActionClient(rospy.get_param("/guiding/action_servers/rotate"), RotateAction),
+            "dialogue": actionlib.SimpleActionClient(rospy.get_param("/guiding/action_servers/dialogue"),
+                                                     dialogue_actionAction),
+            "svp_planner": actionlib.SimpleActionClient(rospy.get_param("/guiding/action_servers/pointing_planner"),
+                                                        PointingAction)}
+
+        servers_status = {
+            "move_to": False,
+            "rotate": False,
+            "dialogue": False,
+            "svp_planner": False}
+
         if rospy.get_param('/guiding/dialogue/hwu'):
             services_status[self.dialogue_inform_srv] = False
             services_status[self.dialogue_query_srv] = False
 
-        service_not_started = True
+        not_started = True
         first = True
 
-        while service_not_started and not rospy.is_shutdown():
+        while not_started and not rospy.is_shutdown():
 
-            service_not_started = False
+            not_started = False
             old_services_status = copy.deepcopy(services_status)
+            old_servers_status = copy.deepcopy(servers_status)
 
             for srv in services_status:
                 try:
@@ -266,15 +281,29 @@ class GuidingAction(object):
                     services_status[srv] = True
                 except rospy.ROSException:
                     services_status[srv] = False
-                    service_not_started = True
+                    not_started = True
 
-            if old_services_status != services_status or first:
+            for srver in servers_status:
+                server_started = clients[srver].wait_for_server(timeout=rospy.Duration(2))
+                if server_started:
+                    servers_status[srver] = True
+                else:
+                    servers_status[srver] = False
+                    not_started = True
+
+            if old_services_status != services_status or old_servers_status != servers_status or first:
                 first = False
                 for srv, status in services_status.iteritems():
                     if status:
                         rospy.loginfo(srv + " status: OK")
                     else:
                         rospy.logerr(srv + " status: Not started")
+
+                for srver, status in servers_status.iteritems():
+                    if status:
+                        rospy.loginfo(srver + " status: OK")
+                    else:
+                        rospy.logerr(srver + " status: Not started")
 
         if rospy.is_shutdown():
             exit(0)
@@ -673,36 +702,6 @@ class GuidingAction(object):
                 outcome_map['LookAtHumanTrack'] == 'succeeded':
             return 'continue_to_look'
 
-    count = 0
-
-    def human_track_perceive_monitor_cb(self, userdata, msg):
-        """Callback that returns False if the human is not perceived after X times, during the tracking of the
-        human going from his start pose to the expected pose. A False means that the calling HumanMonitorTrack state
-        will return 'invalid'
-        """
-        rospy.logwarn("track perceive monitor")
-        perceived = False
-        for fact in msg.facts:
-            if fact.predicate == "isPerceiving" and fact.object_name == userdata.person_frame \
-                    and fact.subject_name == 'robot':
-                perceived = True
-
-        if not perceived:
-            return False
-            # self.count += 1
-            # rospy.logwarn("track perceive monitor %d", self.count)
-        else:
-            # rospy.logwarn("track perceive monitor return valid - perceived")
-            return True
-
-        # if self.count > 7:
-        #     self.count = 0
-        #     rospy.logwarn("track perceive monitor return invalid")
-        #     return False
-        # else:
-        #     rospy.logwarn("track perceive monitor return valid")
-        #     return True
-
     # ------ Callback to handle the monitoring of if the target is visible by the human or not ------ #
 
     # Return 'invalid' if the target is visible by the human
@@ -777,6 +776,8 @@ class GuidingAction(object):
         - last_outcome: Outcome returned by the last state the machine was in
         - last_state: Last active state the machine was in
         """
+
+        self.get_params()
 
         start_waiting_goal = False
         if len(self.waiting_goals) != 0:
@@ -982,8 +983,6 @@ class GetRouteRegion(smach.State):
 
             get_up = GuidingAction.services_proxy["get_individual_info"]("getUp", select_best_route_result['goal'])
 
-            rospy.logwarn(get_up)
-
             if "signpost" in get_up.values:
                 userdata.signpost = True
                 # test if place in region
@@ -1089,7 +1088,7 @@ class AskShowDirection(smach.State):
     def __init__(self):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['get_answer', 'yes', 'not_show', 'preempted'],
-                             input_keys=['human_look_at_point'],
+                             input_keys=['goal_frame', 'human_look_at_point'],
                              output_keys=['question_asked'])
 
     def get_name(self):
@@ -1102,6 +1101,14 @@ class AskShowDirection(smach.State):
             self.service_preempt()
             return 'preempted'
 
+        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.goal_frame)
+        if target_name.code == 0:
+            target_name_value = target_name.values[0]
+
+        # If there is not, the 'technical' name is used
+        else:
+            target_name_value = userdata.goal_frame
+
         if HWU_DIAL:
             # say: it's not here. Would you like me to indicate you the way ?
             answer = GuidingAction.services_proxy["dialogue_query"]("clarification.route_different_region", "")
@@ -1111,7 +1118,7 @@ class AskShowDirection(smach.State):
                 return 'not_show'
         else:
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                                "It's not here",
+                                                target_name_value + " is not here",
                                                 SPEECH_PRIORITY)
             GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                 "Would you like me to indicate you the way ?",
@@ -1578,7 +1585,7 @@ class AskHumanToFollow(smach.State):
         #     GuidingAction.services_proxy["dialogue_inform"]("verbalisation.prompt_user_move_to_robot", "")
         # else:
         GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                            "Follow me, you will better see from here.",
+                                            "Come with me, you will better see from here.",
                                             SPEECH_PRIORITY)
 
         if self.preempt_requested():
@@ -1697,7 +1704,48 @@ class PointAndLookAtHumanFuturePlace(smach.State):
             return 'aborted'
 
 
-class LookAtAssumedPlace(smach.State):
+class Gesture(smach.State):
+
+    def send_coordination_signal(self, frame, duration, priority=100, end_condition="", predicate=""):
+        coord_signal = CoordinationSignal()
+        coord_signal.header.frame_id = frame
+        target = TargetWithExpiration()
+        target.target.header.frame_id = frame
+        target.duration = duration
+        coord_signal.targets.append(target)
+        coord_signal.priority = priority
+        coord_signal.expiration = rospy.Time() + duration
+        if end_condition != "":
+            coord_signal.regex_end_condition = end_condition
+        if predicate != "":
+            coord_signal.predicate = predicate
+        GuidingAction.coord_signals_publisher.publish(coord_signal)
+
+    def call_can_point_at(self, frame):
+        point_stamped = PointStamped()
+        point_stamped.header.frame_id = frame
+        can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
+        return can_point_at_resp
+
+    def call_can_look_at(self, frame):
+        point_stamped = PointStamped()
+        point_stamped.header.frame_id = frame
+        can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
+        return can_look_at_resp
+
+    def point_at(self, frame):
+        point_at_request = PointAtRequest()
+        point_at_request.point.header.frame_id = frame
+        point_at_resp = GuidingAction.services_proxy["point_at"](point_at_request)
+        return point_at_resp.success
+
+    def execute_rotation_deic_gest(self, angle):
+        GuidingAction.sm_test_rotation.userdata.rotation = angle
+        GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
+        GuidingAction.sm_test_rotation.execute()
+
+
+class LookAtAssumedPlace(Gesture):
     """The robot looks at where it asked the human to go. It checks if the human is perceived
     and if not (check the variable human_perceived modified by the callback on the facts listener),
     returned that is should look again. After 2 times where the human has not been seen, it will assume that
@@ -1751,21 +1799,9 @@ class LookAtAssumedPlace(smach.State):
         if not can_look_at_resp.success:
             rospy.logwarn("cannot look")
 
-            GuidingAction.sm_test_rotation.userdata.rotation = can_look_at_resp.angle
-            GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
-            GuidingAction.sm_test_rotation.execute()
+            self.execute_rotation_deic_gest(can_look_at_resp.angle)
 
-        coord_signal = CoordinationSignal()
-        coord_signal.header.frame_id = look_at.header.frame_id
-        target = TargetWithExpiration()
-        target.target = look_at
-        target.duration = rospy.Duration(1)
-        coord_signal.targets.append(target)
-        coord_signal.priority = 100
-        coord_signal.expiration = rospy.Time() + rospy.Duration(1)
-        # coord_signal.regex_end_condition = "isPerceiving\(robot," + userdata.human_pose.header.frame_id + "\)"
-        coord_signal.predicate = "isWaiting(robot," + userdata.human_pose.header.frame_id + ")"
-        GuidingAction.coord_signals_publisher.publish(coord_signal)
+        self.send_coordination_signal(look_at.header.frame_id, rospy.Duration(1))
 
         rospy.sleep(1)
 
@@ -1804,7 +1840,7 @@ class CheckPerceived(smach.State):
     def execute(self, userdata):
         CheckPerceived.does_not_see += 1
         if not human_perceived:
-            if CheckPerceived.does_not_see < 4:
+            if CheckPerceived.does_not_see < 6:
                 if CheckPerceived.does_not_see == 1:
                     if HWU_DIAL:
                         GuidingAction.services_proxy["dialogue_inform"]("verbalisation. user_not_visible_prompt", "")
@@ -1812,6 +1848,7 @@ class CheckPerceived(smach.State):
                         GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                                                             "I am sorry, I cannot see you. Where are you ?",
                                                             SPEECH_PRIORITY)
+                        rospy.sleep(0.5)
                 # if self.does_not_see == 2:
                 #     GuidingAction.services_proxy["say"](userdata.human_look_at_point,
                 #                                         "I still cannot see you but I will assume that you are here",
@@ -2167,42 +2204,6 @@ class SelectLandmark(smach.State):
                 return 'point_not_visible'
 
 
-class Gesture(smach.State):
-
-    def send_coordination_signal(self, frame, duration, priority=100, end_condition="", predicate=""):
-        coord_signal = CoordinationSignal()
-        coord_signal.header.frame_id = frame
-        target = TargetWithExpiration()
-        target.target.header.frame_id = frame
-        target.duration = duration
-        coord_signal.targets.append(target)
-        coord_signal.priority = priority
-        coord_signal.expiration = rospy.Time() + duration
-        if end_condition != "":
-            coord_signal.regex_end_condition = end_condition
-        if predicate != "":
-            coord_signal.predicate = predicate
-        GuidingAction.coord_signals_publisher.publish(coord_signal)
-
-    def call_can_point_at(self, frame):
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = frame
-        can_point_at_resp = GuidingAction.services_proxy["can_point_at"](point_stamped)
-        return can_point_at_resp
-
-    def call_can_look_at(self, frame):
-        point_stamped = PointStamped()
-        point_stamped.header.frame_id = frame
-        can_look_at_resp = GuidingAction.services_proxy["can_look_at"](point_stamped)
-        return can_look_at_resp
-
-    def point_at(self, frame):
-        point_at_request = PointAtRequest()
-        point_at_request.point.header.frame_id = frame
-        point_at_resp = GuidingAction.services_proxy["point_at"](point_at_request)
-        return point_at_resp.success
-
-
 class Pointing(Gesture):
 
     TARGET_SAME_AREA = 0
@@ -2227,12 +2228,8 @@ class Pointing(Gesture):
         GuidingAction.sm_test_rotation.userdata.human_look_at_point = userdata.human_look_at_point
         GuidingAction.sm_test_rotation.userdata.direction = userdata.direction
         GuidingAction.sm_test_rotation.set_initial_state(['GetRotationAngle'])
-        GuidingAction.sm_test_rotation.execute()
-
-    def execute_rotation_deic_gest(self, angle):
-        GuidingAction.sm_test_rotation.userdata.rotation = angle
-        GuidingAction.sm_test_rotation.set_initial_state(['Rotate'])
-        GuidingAction.sm_test_rotation.execute()
+        outcome = GuidingAction.sm_test_rotation.execute()
+        return outcome
 
     def select_speech_case(self, landmark_to_point_type, route, signpost):
         case = Pointing.TARGET_SAME_AREA
@@ -2255,7 +2252,7 @@ class Pointing(Gesture):
     def speech(self, case, visible, userdata):
         if HWU_DIAL:
             if case == Pointing.TARGET_SAME_AREA or case == Pointing.DIRECTION:
-                route_description = GuidingAction.services_proxy["get_route_description"](
+                route_description = GuidingAction.services_proxy["route_verbalization"](
                     userdata.route, ROBOT_PLACE, userdata.landmark_to_point[LANDMARK_NAME]).region_route
                 GuidingAction.services_proxy["dialogue_inform"]("execute.route_description_plain",
                                                                 json.dumps(route_description))
@@ -2265,7 +2262,7 @@ class Pointing(Gesture):
                                                                                 LANDMARK_NAME], case]))
         else:
             if case == Pointing.TARGET_SAME_AREA or case == case == Pointing.DIRECTION:
-                route_description = GuidingAction.services_proxy["get_route_description"](
+                route_description = GuidingAction.services_proxy["route_verbalization"](
                     userdata.route_2_shop_wo_sign, ROBOT_PLACE, userdata.target_frame).region_route
                 GuidingAction.services_proxy["say"](userdata.human_look_at_point, route_description,
                                                     SPEECH_PRIORITY)
@@ -2310,7 +2307,7 @@ class PointNotVisible(Pointing):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
                              input_keys=['landmark_to_point', 'human_look_at_point', 'route_2_shop_wo_sign',
-                                         'goal_frame', 'person_frame', 'persona', 'signpost'])
+                                         'goal_frame', 'person_frame', 'persona', 'signpost', 'target_frame'])
         self._tfBuffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tfBuffer)
 
@@ -2374,7 +2371,8 @@ class PointAndLookAtLandmark(Pointing):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'aborted'],
                              input_keys=['person_frame', 'goal_frame', 'landmark_to_point', 'human_look_at_point',
-                                         'route', 'persona', 'route_2_shop_wo_sign', 'direction', 'signpost'])
+                                         'route', 'persona', 'route_2_shop_wo_sign', 'direction', 'signpost',
+                                         'target_frame'])
 
     def get_name(self):
         return self.__class__.__name__
