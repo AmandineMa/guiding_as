@@ -26,7 +26,9 @@ class ServiceWrapper(rospy.ServiceProxy):
         """
         saved_args = locals()
         rospy.logdebug(self.resolved_name + " called with the following arguments : " + str(saved_args["args"]))
-        return self.call(*args, **kwds)
+        output = self.call(*args, **kwds)
+        rospy.logdebug(self.resolved_name + " output : \n" + str(output))
+        return output
 
 
 # def test_service():
