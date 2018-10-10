@@ -34,6 +34,8 @@ from speech_wrapper_msgs.srv import *
 from rpn_recipe_planner_msgs.srv import *
 from mummer_navigation_msgs.msg import *
 from service_wrapper import ServiceWrapper
+from visualization_msgs.msg import *
+from std_msgs.msg import ColorRGBA
 
 __all__ = ['AskHumanToMoveAfter', 'AskPointAgain', 'AskSeen', 'AskShowDirection', 'AskShowPlace', 'DispatchYesNo',
            'DispatchYesNoCL', 'GetRouteRegion', 'GuidingAction', 'HumanLost', 'IsOver',
@@ -58,6 +60,12 @@ HUMAN_FOLLOW = True
 # supervisor constants
 SPEECH_PRIORITY = 250
 
+ROBOT_POSE = 0
+HUMAN_POSE = 3
+LOOK_AT_HUMAN = 1
+LOOK_AT_ASSUMED_PLACE = 2
+LOOK_AT_LANDMARK = 4
+
 # global variable
 human_perceived = False
 next_state = ""
@@ -75,6 +83,8 @@ class GuidingAction(object):
     services_proxy = {}
     sm_test_rotation = None
     coord_signals_publisher = None
+    visualization_publisher = None
+    marker_handling = None
 
     def __init__(self, name):
         self._action_name = name
@@ -138,6 +148,8 @@ class GuidingAction(object):
 
         GuidingAction.coord_signals_publisher = rospy.Publisher(rospy.get_param('/guiding/topics/coord_signals'),
                                                                 CoordinationSignal, queue_size=5)
+
+        GuidingAction.marker_handling = MarkerHandling()
 
         self.guiding_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'],
                                              input_keys=['person_frame', 'human_look_at_point'],
@@ -778,6 +790,7 @@ class GuidingAction(object):
         """
 
         self.get_params()
+        GuidingAction.marker_handling.remove_all_markers()
 
         start_waiting_goal = False
         if len(self.waiting_goals) != 0:
@@ -839,7 +852,7 @@ class GuidingAction(object):
         self.time_lost = 0
         self.duration_lost = 0
         self.fact_id = ""
-        self.count = 0
+        GuidingAction.marker_handling.reset_variables()
         LookAtAssumedPlace.does_not_see = 0
         CheckPerceived.does_not_see = 0
         SelectLandmark.target_pointed = False
@@ -886,6 +899,88 @@ class GuidingAction(object):
         go_to_posture_request.posture_name = "StandInit"
         go_to_posture_request.speed = 1
         GuidingAction.services_proxy["stand_pose"](go_to_posture_request)
+
+
+class MarkerHandling(object):
+    def __init__(self):
+        self.visualization_publisher = rospy.Publisher("/visualization_marker", Marker, queue_size=10)
+        self.orange_count = 0
+        self.blue_count = 0
+        self.green_count = 0
+        self.yellow_count = 0
+        self.marker_id = 0
+
+    def orange(self):
+        if self.orange_count == 0:
+            return ColorRGBA(0.9, 0.7, 0.4, 1.0)
+        elif self.orange_count == 1:
+            return ColorRGBA(0.9, 0.6, 0, 1.0)
+        else:
+            return ColorRGBA(0.9, 0.5, 0.1, 1.0)
+
+    def yellow(self):
+        if self.yellow_count == 0:
+            return ColorRGBA(1, 1, 0.1, 1.0)
+        elif self.yellow_count == 1:
+            return ColorRGBA(1, 0.9, 0.2, 1.0)
+        else:
+            return ColorRGBA(1, 0.8, 0.1, 1.0)
+
+    def blue(self):
+        if self.blue_count == 0:
+            return ColorRGBA(0, 0.6, 0.9, 1.0)
+        elif self.blue_count == 1:
+            return ColorRGBA(0, 0.3, 0.7, 1.0)
+        else:
+            return ColorRGBA(0, 0, 1, 1.0)
+
+    def green(self):
+        if self.green_count == 0:
+            return ColorRGBA(0, 0.8, 0.3, 1.0)
+        elif self.green_count == 1:
+            return ColorRGBA(0, 0.6, 0, 1.0)
+        else:
+            return ColorRGBA(0, 0.4, 0.2, 1.0)
+
+    def purple(self):
+        return ColorRGBA(0.5, 0.2, 0.8, 1.0)
+
+    def reset_variables(self):
+        self.orange_count = 0
+        self.blue_count = 0
+        self.green_count = 0
+        self.yellow_count = 0
+        self.marker_id = 0
+
+    def publish_marker(self, frame, pose, color_type):
+        marker = Marker()
+        marker.ns = "supervisor"
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.id = self.marker_id
+        marker.pose = pose
+        marker.scale.x = 0.3
+        marker.scale.y = 0.3
+        marker.scale.z = 0.3
+        if color_type == LOOK_AT_ASSUMED_PLACE:
+            marker.color = self.green()
+        elif color_type == LOOK_AT_HUMAN:
+            marker.color = self.blue()
+        elif color_type == ROBOT_POSE:
+            marker.color = self.yellow()
+        elif color_type == HUMAN_POSE:
+            marker.color = self.orange()
+        elif color_type == LOOK_AT_LANDMARK:
+            marker.color = self.purple()
+        marker.header.frame_id = frame
+        self.marker_id += 1
+        self.visualization_publisher.publish(marker)
+
+    def remove_all_markers(self):
+        marker = Marker()
+        marker.ns = "supervisor"
+        marker.action = Marker.DELETEALL
+        self.visualization_publisher.publish(marker)
 
 
 NO_INTERFACE_LEN = 3
@@ -1056,7 +1151,7 @@ class AskShowPlace(smach.State):
             self.service_preempt()
             return 'preempted'
 
-        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.goal_frame)
+        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.target_frame)
 
         # If a verbalized/label name exists in the ontology, it is used
         if target_name.code == 0:
@@ -1101,13 +1196,13 @@ class AskShowDirection(smach.State):
             self.service_preempt()
             return 'preempted'
 
-        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.goal_frame)
+        target_name = GuidingAction.services_proxy["get_individual_info"]("getName", userdata.target_frame)
         if target_name.code == 0:
             target_name_value = target_name.values[0]
 
         # If there is not, the 'technical' name is used
         else:
-            target_name_value = userdata.goal_frame
+            target_name_value = userdata.target_frame
 
         if HWU_DIAL:
             # say: it's not here. Would you like me to indicate you the way ?
@@ -1328,6 +1423,10 @@ class PointingConfig(SVPPlannerClient):
         if status == actionlib.GoalStatus.SUCCEEDED:
             userdata.target_pose = result.robot_pose
             userdata.human_pose = result.human_pose
+            GuidingAction.marker_handling.publish_marker(result.human_pose.header.frame_id, result.human_pose.pose,
+                                                         HUMAN_POSE)
+            GuidingAction.marker_handling.publish_marker(result.robot_pose.header.frame_id, result.robot_pose.pose,
+                                                         ROBOT_POSE)
 
             if userdata.goal_frame in result.pointed_landmarks:
                 userdata.landmarks_to_point.append(userdata.goal_frame)
@@ -1387,6 +1486,8 @@ class PointingConfigForRobot(SVPPlannerClient):
     def pointing_config_result_cb(userdata, status, result):
         if status == actionlib.GoalStatus.SUCCEEDED:
             userdata.target_pose = result.robot_pose
+            GuidingAction.marker_handling.publish_marker(result.robot_pose.header.frame_id, result.robot_pose.pose,
+                                                         ROBOT_POSE)
             return 'succeeded'
         else:
             return 'aborted'
@@ -1706,11 +1807,15 @@ class PointAndLookAtHumanFuturePlace(smach.State):
 
 class Gesture(smach.State):
 
-    def send_coordination_signal(self, frame, duration, priority=100, end_condition="", predicate=""):
+    def send_coordination_signal(self, frame, duration, point_stamped=None, priority=100, end_condition="",
+                                 predicate=""):
         coord_signal = CoordinationSignal()
         coord_signal.header.frame_id = frame
         target = TargetWithExpiration()
-        target.target.header.frame_id = frame
+        if point_stamped is not None:
+            target.target = point_stamped
+        else:
+            target.target.header.frame_id = frame
         target.duration = duration
         coord_signal.targets.append(target)
         coord_signal.priority = priority
@@ -1801,7 +1906,10 @@ class LookAtAssumedPlace(Gesture):
 
             self.execute_rotation_deic_gest(can_look_at_resp.angle)
 
-        self.send_coordination_signal(look_at.header.frame_id, rospy.Duration(1))
+        self.send_coordination_signal(frame=look_at.header.frame_id, point_stamped=look_at, duration=rospy.Duration(1))
+        pose = Pose()
+        pose.position = look_at.point
+        GuidingAction.marker_handling.publish_marker(look_at.header.frame_id, pose, LOOK_AT_ASSUMED_PLACE)
 
         rospy.sleep(1)
 
@@ -2384,6 +2492,8 @@ class PointAndLookAtLandmark(Pointing):
             self.execute_rotation_try_svp_angle(userdata)
 
         self.send_coordination_signal(userdata.landmark_to_point[LANDMARK_NAME], rospy.Duration(1))
+        pose = Pose()
+        GuidingAction.marker_handling.publish_marker(userdata.landmark_to_point[LANDMARK_NAME], pose, LOOK_AT_LANDMARK)
 
         point_at_success = self.point_at(userdata.landmark_to_point[LANDMARK_NAME])
 
@@ -2440,6 +2550,8 @@ class LookAtHuman(Gesture):
             GuidingAction.sm_test_rotation.execute()
 
         self.send_coordination_signal(userdata.person_frame, rospy.Duration(0, 1))
+        pose = Pose()
+        GuidingAction.marker_handling.publish_marker(userdata.person_frame, pose, LOOK_AT_HUMAN)
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
