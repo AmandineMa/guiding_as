@@ -1137,7 +1137,7 @@ class AskShowPlace(smach.State):
         """
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['get_answer', 'show', 'not_show', 'preempted'],
-                             input_keys=['goal_frame', 'human_look_at_point'],
+                             input_keys=['target_frame', 'human_look_at_point'],
                              output_keys=['question_asked'])
 
     def get_name(self):
