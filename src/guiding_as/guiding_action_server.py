@@ -164,7 +164,11 @@ class GuidingAction(object):
 
         self.check_landmark_seen_sm = smach.StateMachine(outcomes=['yes', 'no', 'pointing', 'preempted', 'failure'],
                                                          input_keys=['human_look_at_point', 'last_state',
-                                                         'person_frame', 'last_outcome'])
+                                                         'person_frame'])
+
+        self.look_at_human_assumed_place = smach.StateMachine(outcomes=['look_succeeded', 'look_failed', 'preempted'],
+                                                              input_keys=['human_pose', 'human_look_at_point',
+                                                                          'person_frame'])
 
         self.top_sm = smach.StateMachine(outcomes=['task_succeeded', 'task_failed', 'preempted'])
 
@@ -376,11 +380,7 @@ class GuidingAction(object):
                                                     'aborted': 'show_failed',
                                                     'preempted': 'preempted'})
 
-                look_at_human_assumed_place = smach.StateMachine(
-                    outcomes=['look_succeeded', 'look_failed', 'preempted'],
-                    input_keys=['human_pose', 'human_look_at_point', 'person_frame'])
-
-                with look_at_human_assumed_place:
+                with self.look_at_human_assumed_place:
                     smach.StateMachine.add('LookAtAssumedPlace', LookAtAssumedPlace(),
                                            transitions={'succeeded': 'look_succeeded', 'preempted': 'preempted',
                                                         'human_lost': 'LookAtHuman',
@@ -415,7 +415,7 @@ class GuidingAction(object):
                                                         'aborted': 'show_failed',
                                                         'preempted': 'preempted'})
 
-                    smach.StateMachine.add('LookAtHumanAssumedPlaceX', look_at_human_assumed_place,
+                    smach.StateMachine.add('LookAtHumanAssumedPlaceX', self.look_at_human_assumed_place,
                                            transitions={'look_succeeded': 'AreLandmarksVisibleFromHuman',
                                                         'look_failed': 'HumanLost', 'preempted': 'preempted'})
 
@@ -448,7 +448,7 @@ class GuidingAction(object):
                                        transitions={'succeeded': 'LookAtHumanAssumedPlaceY',
                                                     'preempted': 'preempted', 'aborted': 'show_failed'})
 
-                smach.StateMachine.add('LookAtHumanAssumedPlaceY', look_at_human_assumed_place,
+                smach.StateMachine.add('LookAtHumanAssumedPlaceY', self.look_at_human_assumed_place,
                                        transitions={'look_succeeded': 'SelectLandmark', 'preempted': 'preempted',
                                                     'look_failed': 'HumanLost'})
 
@@ -560,8 +560,6 @@ class GuidingAction(object):
         self.guiding_sm.register_termination_cb(self.term_cb, cb_args=[])
         self.show_sm.register_start_cb(self.guiding_start_cb, cb_args=[])
         self.show_sm.register_transition_cb(self.guiding_start_cb, cb_args=[self.show_sm])
-        self.check_landmark_seen_sm.register_transition_cb(self.guiding_transition_cb,
-                                                           cb_args=[self.check_landmark_seen_sm])
 
     def guiding_start_cb(self, userdata, initial_states, *cb_args):
         """Callback to initialize the userdata.active_state variable"""
@@ -802,21 +800,24 @@ class GuidingAction(object):
                     self.guiding_sm.userdata = getattr(i, "guiding_ud")
                     self.show_sm.userdata = getattr(i, "show_ud")
 
-                    self.top_sm.set_initial_state([getattr(i, "interrupted_state")])
+                    sm_list = [self.top_sm, self.guiding_sm, self.show_sm]
 
-                    try:
-                        rospy.logwarn("An InvalidTransitionError is raised, no worry, it has to be ignored")
-                        self.top_sm.check_consistency()
+                    for sm in sm_list:
+                        if getattr(i, "interrupted_state") in sm.available_states():
+                            if sm == self.show_sm:
+                                self.top_sm.set_initial_state(['GUIDING_MONITORING'])
+                                self.guiding_sm.set_initial_state(['Show'])
+                                self.show_sm.set_initial_state([getattr(i, "interrupted_state")])
+                            elif sm == self.guiding_sm:
+                                self.top_sm.set_initial_state(['GUIDING_MONITORING'])
+                                self.guiding_sm.set_initial_state([getattr(i, "interrupted_state")])
+                                self.show_sm.set_initial_state(['ShouldCallPointingConfig'])
+                            else:
+                                self.top_sm.set_initial_state([getattr(i, "interrupted_state")])
+                                self.guiding_sm.set_initial_state(['GetRouteRegion'])
+                                self.show_sm.set_initial_state(['ShouldCallPointingConfig'])
+                            break
 
-                    except smach.InvalidTransitionError:
-                        self.top_sm.set_initial_state(['GUIDING_MONITORING'])
-                        self.guiding_sm.set_initial_state([getattr(i, "interrupted_state")])
-                        try:
-                            rospy.logwarn("An InvalidTransitionError is raised, no worry, it has to be ignored")
-                            self.guiding_sm.check_consistency()
-                        except smach.InvalidTransitionError:
-                            self.guiding_sm.set_initial_state(['Show'])
-                            self.show_sm.set_initial_state([getattr(i, "interrupted_state")])
                     start_waiting_goal = True
                     self.waiting_goals.remove(i)
 
