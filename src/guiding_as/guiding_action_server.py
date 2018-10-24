@@ -34,6 +34,7 @@ from speech_wrapper_msgs.srv import *
 from rpn_recipe_planner_msgs.srv import *
 from mummer_navigation_msgs.msg import *
 from service_wrapper import ServiceWrapper
+from publisher_wrapper import PublisherWrapper
 from visualization_msgs.msg import *
 from std_msgs.msg import ColorRGBA
 
@@ -146,8 +147,8 @@ class GuidingAction(object):
         # "activate_dialogue": rospy.ServiceProxy(activate_dialogue_srv, Trigger),
         # "deactivate_dialogue": rospy.ServiceProxy(deactivate_dialogue_srv, Trigger)}
 
-        GuidingAction.coord_signals_publisher = rospy.Publisher(rospy.get_param('/guiding/topics/coord_signals'),
-                                                                CoordinationSignal, queue_size=5)
+        GuidingAction.coord_signals_publisher = PublisherWrapper(rospy.get_param('/guiding/topics/coord_signals'),
+                                                                 CoordinationSignal, queue_size=5)
 
         GuidingAction.marker_handling = MarkerHandling()
 
@@ -904,7 +905,7 @@ class GuidingAction(object):
 
 class MarkerHandling(object):
     def __init__(self):
-        self.visualization_publisher = rospy.Publisher("/visualization_marker", Marker, queue_size=10)
+        self.visualization_publisher = PublisherWrapper("/visualization_marker", Marker, queue_size=10)
         self.orange_count = 0
         self.blue_count = 0
         self.green_count = 0
