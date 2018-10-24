@@ -1229,7 +1229,7 @@ class AskStairsOrElevator(smach.State):
         rospy.loginfo("Initialization of " + self.get_name() + " state")
         smach.State.__init__(self, outcomes=['get_answer', 'no_stairs', 'stairs', 'elevator', 'preempted'],
                              input_keys=['stairs', 'human_look_at_point'],
-                             output_keys=['question_asked'])
+                             output_keys=['question_asked', 'persona'])
 
     def get_name(self):
         return self.__class__.__name__
@@ -1248,6 +1248,7 @@ class AskStairsOrElevator(smach.State):
                 if answer.result == 'true':
                     return 'stairs'
                 else:
+                    userdata.persona = "old"
                     return 'elevator'
             else:
                 GuidingAction.services_proxy["say"](userdata.human_look_at_point,
@@ -1682,13 +1683,13 @@ class AskHumanToFollow(smach.State):
     def execute(self, userdata):
         """Calls the speech service to ask the human to move"""
 
-        # if HWU_DIAL:
-        #     # say "I am going to move, so you can come to my current place. You will better see from here."
-        #     GuidingAction.services_proxy["dialogue_inform"]("verbalisation.prompt_user_move_to_robot", "")
-        # else:
-        GuidingAction.services_proxy["say"](userdata.human_look_at_point,
-                                            "Come with me, you will better see from here.",
-                                            SPEECH_PRIORITY)
+        if HWU_DIAL:
+            # say "I am going to move, so you can come to my current place. You will better see from here."
+            GuidingAction.services_proxy["dialogue_inform"]("verbalisation.prompt_user_move_to_robot", "")
+        else:
+            GuidingAction.services_proxy["say"](userdata.human_look_at_point,
+                                                "Come with me, you will better see from here.",
+                                                SPEECH_PRIORITY)
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
@@ -1793,6 +1794,7 @@ class PointAndLookAtHumanFuturePlace(smach.State):
         rospy.sleep(POINTING_DURATION)
 
         GuidingAction.services_proxy["rest_arm"]("Arms")
+        rospy.sleep(1.0)
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
@@ -2450,6 +2452,7 @@ class PointNotVisible(Pointing):
 
             rospy.sleep(POINTING_DURATION)
             GuidingAction.services_proxy["rest_arm"]("Arms")
+            rospy.sleep(1.0)
 
             if point_at_success:
                 return 'succeeded'
@@ -2506,6 +2509,7 @@ class PointAndLookAtLandmark(Pointing):
         rospy.sleep(POINTING_DURATION)
 
         GuidingAction.services_proxy["rest_arm"]("Arms")
+        rospy.sleep(1.0)
 
         if self.preempt_requested():
             rospy.loginfo(self.get_name() + " preempted")
